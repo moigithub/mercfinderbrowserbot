@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2025/11/19 09:48:35.000.551,G:\delphiprojs\MDIBrowser\Unit1.pas=</Transaction>
+    <Transaction>2025/11/19 09:48:42.000.361,G:\delphiprojs\MDIBrowser\Unit2.pas=</Transaction>
+    <Transaction>2025/11/19 09:49:30.000.230,=G:\delphiprojs\MDIBrowser\uSimpleOSRBrowser.pas</Transaction>
+    <Transaction>2025/11/19 09:49:30.000.161,=G:\delphiprojs\MDIBrowser\Unit3.pas</Transaction>
+    <Transaction>2025/11/19 15:41:48.000.688,G:\delphiprojs\MDIBrowser\MDIBrowser.dproj=G:\delphiprojs\MDIBrowser\syncBrowser.dproj</Transaction>
+  </Transactions>
+</BorlandProject>

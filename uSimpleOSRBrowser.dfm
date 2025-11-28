@@ -1,0 +1,263 @@
+object Form1: TForm1
+  Left = 0
+  Top = 0
+  Width = 1300
+  Height = 872
+  AutoScroll = True
+  Caption = 'Simple OSR Browser - Initializing browser. Please wait...'
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -11
+  Font.Name = 'Tahoma'
+  Font.Style = []
+  FormStyle = fsMDIChild
+  Position = poScreenCenter
+  Visible = True
+  OnAfterMonitorDpiChanged = FormAfterMonitorDpiChanged
+  OnClose = FormClose
+  OnCloseQuery = FormCloseQuery
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnHide = FormHide
+  OnShow = FormShow
+  TextHeight = 13
+  object Image1: TImage
+    Left = 1029
+    Top = 112
+    Width = 77
+    Height = 33
+  end
+  object Image2: TImage
+    Left = 1117
+    Top = 112
+    Width = 81
+    Height = 33
+  end
+  object Image3: TImage
+    Left = 1204
+    Top = 112
+    Width = 81
+    Height = 33
+  end
+  object Panel1: TBufferPanel
+    Left = -1
+    Top = 32
+    Width = 1024
+    Height = 768
+    OnIMECancelComposition = Panel1IMECancelComposition
+    OnIMECommitText = Panel1IMECommitText
+    OnIMESetComposition = Panel1IMESetComposition
+    OnCustomTouch = Panel1CustomTouch
+    OnPointerDown = Panel1PointerDown
+    OnPointerUp = Panel1PointerUp
+    OnPointerUpdate = Panel1PointerUpdate
+    OnPaintParentBkg = Panel1PaintParentBkg
+    Ctl3D = False
+    ParentCtl3D = False
+    BevelOuter = bvNone
+    TabOrder = 2
+    TabStop = True
+    OnClick = Panel1Click
+    OnEnter = Panel1Enter
+    OnExit = Panel1Exit
+    OnMouseDown = Panel1MouseDown
+    OnMouseMove = Panel1MouseMove
+    OnMouseUp = Panel1MouseUp
+    OnResize = Panel1Resize
+    OnMouseLeave = Panel1MouseLeave
+  end
+  object NavControlPnl: TPanel
+    Left = 0
+    Top = 0
+    Width = 1285
+    Height = 30
+    Align = alTop
+    BevelOuter = bvNone
+    Padding.Left = 5
+    Padding.Top = 5
+    Padding.Right = 5
+    Padding.Bottom = 5
+    TabOrder = 0
+    object AddressCb: TComboBox
+      Left = 5
+      Top = 5
+      Width = 812
+      Height = 21
+      Align = alLeft
+      TabOrder = 0
+      Text = 'https://totalbattle.com?present=gold'
+      OnEnter = AddressCbEnter
+    end
+    object Panel2: TPanel
+      Left = 1155
+      Top = 5
+      Width = 125
+      Height = 20
+      Margins.Left = 2
+      Margins.Top = 2
+      Margins.Right = 2
+      Margins.Bottom = 2
+      Align = alRight
+      BevelOuter = bvNone
+      Padding.Left = 4
+      TabOrder = 1
+      object GoBtn: TButton
+        Left = 4
+        Top = 0
+        Width = 40
+        Height = 20
+        Align = alLeft
+        Caption = 'Go'
+        TabOrder = 0
+        OnClick = GoBtnClick
+        OnEnter = GoBtnEnter
+      end
+      object SnapshotBtn: TButton
+        Left = 94
+        Top = 0
+        Width = 31
+        Height = 20
+        Hint = 'Take snapshot'
+        Margins.Left = 5
+        Align = alRight
+        Caption = #181
+        Font.Charset = SYMBOL_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -24
+        Font.Name = 'Webdings'
+        Font.Style = []
+        ParentFont = False
+        ParentShowHint = False
+        ShowHint = True
+        TabOrder = 1
+        OnClick = SnapshotBtnClick
+        OnEnter = SnapshotBtnEnter
+      end
+      object Button1: TButton
+        Left = 64
+        Top = 0
+        Width = 30
+        Height = 20
+        Align = alRight
+        Caption = 'R'
+        TabOrder = 2
+        OnClick = Button1Click
+      end
+    end
+  end
+  object Button2: TButton
+    Left = 1029
+    Top = 36
+    Width = 114
+    Height = 49
+    Caption = 'Button2'
+    TabOrder = 1
+    OnClick = Button2Click
+  end
+  object Memo1: TMemo
+    Left = 1112
+    Top = 384
+    Width = 172
+    Height = 416
+    ScrollBars = ssVertical
+    TabOrder = 3
+  end
+  object memoKingdoms: TMemo
+    Left = 1032
+    Top = 384
+    Width = 74
+    Height = 416
+    Lines.Strings = (
+      '142'
+      '147'
+      '150'
+      '143'
+      '151'
+      '138'
+      '139'
+      '148'
+      '152'
+      '154'
+      '155'
+      '144'
+      '148'
+      '156'
+      '141'
+      '145'
+      '149'
+      '153'
+      '157')
+    TabOrder = 4
+  end
+  object Button3: TButton
+    Left = 1176
+    Top = 40
+    Width = 89
+    Height = 45
+    Caption = 'Button3'
+    TabOrder = 5
+    OnClick = Button3Click
+  end
+  object Edit1: TEdit
+    Left = 1029
+    Top = 168
+    Width = 66
+    Height = 21
+    TabOrder = 6
+    Text = 'Edit1'
+  end
+  object Edit2: TEdit
+    Left = 1120
+    Top = 168
+    Width = 79
+    Height = 21
+    TabOrder = 7
+    Text = 'Edit2'
+  end
+  object Edit3: TEdit
+    Left = 1205
+    Top = 168
+    Width = 78
+    Height = 21
+    TabOrder = 8
+    Text = 'Edit3'
+  end
+  object chrmosr: TChromium
+    OnCanFocus = chrmosrCanFocus
+    OnTooltip = chrmosrTooltip
+    OnCursorChange = chrmosrCursorChange
+    OnBeforePopup = chrmosrBeforePopup
+    OnAfterCreated = chrmosrAfterCreated
+    OnBeforeClose = chrmosrBeforeClose
+    OnGetViewRect = chrmosrGetViewRect
+    OnGetScreenPoint = chrmosrGetScreenPoint
+    OnGetScreenInfo = chrmosrGetScreenInfo
+    OnPopupShow = chrmosrPopupShow
+    OnPopupSize = chrmosrPopupSize
+    OnPaint = chrmosrPaint
+    OnIMECompositionRangeChanged = chrmosrIMECompositionRangeChanged
+    OnDevToolsMethodResult = chrmosrDevToolsMethodResult
+    Left = 24
+    Top = 56
+  end
+  object AppEvents: TApplicationEvents
+    OnMessage = AppEventsMessage
+    Left = 24
+    Top = 128
+  end
+  object SaveDialog1: TSaveDialog
+    DefaultExt = 'bmp'
+    Filter = 'Bitmap files (*.bmp)|*.BMP'
+    Title = 'Save snapshot'
+    Left = 24
+    Top = 278
+  end
+  object Timer1: TTimer
+    Enabled = False
+    Interval = 300
+    OnTimer = Timer1Timer
+    Left = 24
+    Top = 206
+  end
+end
