@@ -226,6 +226,7 @@ object Form1: TForm1
   object chrmosr: TChromium
     OnCanFocus = chrmosrCanFocus
     OnTooltip = chrmosrTooltip
+    OnConsoleMessage = chrmosrConsoleMessage
     OnCursorChange = chrmosrCursorChange
     OnBeforePopup = chrmosrBeforePopup
     OnAfterCreated = chrmosrAfterCreated

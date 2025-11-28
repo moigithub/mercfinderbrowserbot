@@ -6,7 +6,7 @@ interface
 
 uses
 uCEFChromium, uCEFTypes, uCEFInterfaces,  uCEFBufferPanel,
-  uCEFChromiumCore,
+  uCEFChromiumCore,  SyncObjs,
   OPENCVWrapper, Vcl.Samples.Spin,
     {$IFDEF DELPHI16_UP}
   System.Math,
@@ -77,8 +77,12 @@ type
 
 var
   MainForm: TMainForm;
+  haveError:boolean;
+  GlobalLock: TCriticalSection;
 
 procedure CreateGlobalCEFApp;
+
+
 
 implementation
 
@@ -102,6 +106,19 @@ begin
     PostMessage(MainForm.Handle, CEFBROWSER_INITIALIZED, 0, 0);
 end;
 
+procedure MyAppOnUncaughtException(const browser: ICefBrowser;
+          const frame: ICefFrame; const context: ICefv8Context;
+          const exception: ICefV8Exception; const stackTrace: ICefV8StackTrace) ;
+begin
+   outputdebugstring('got some error');
+   GlobalLock.Enter; // Acquire the lock
+  try
+   haveError:=true;
+  finally
+    GlobalLock.Leave; // Release the lock immediately when done
+  end;
+end;
+
 procedure CreateGlobalCEFApp;
 begin
   // GlobalCEFApp.RootCache must be the parent of all cache directories
@@ -112,6 +129,9 @@ begin
 //  GlobalCEFApp.cache := GlobalCEFApp.RootCache + '\cache';
   GlobalCEFApp.LogFile := 'debug.log';
   GlobalCEFApp.LogSeverity := LOGSEVERITY_INFO;
+  GlobalCEFApp.OnUncaughtException :=MyAppOnUncaughtException;
+//   GlobalCEFApp.UncaughtExceptionStackSize to a value greater than 0 to enable it.
+  GlobalCEFApp.UncaughtExceptionStackSize :=20;
 
    GlobalCEFApp.WindowlessRenderingEnabled := True;
    GlobalCEFApp.TouchEvents                := STATE_ENABLED;
@@ -218,6 +238,7 @@ begin
   FBrowserCount := 0;
 
   initialized := false;
+  haveError:=false;
 end;
 
 procedure TMainForm.NewBtnClick(Sender: TObject);
@@ -420,4 +441,8 @@ begin
   end;
 end;
 
+
+
+initialization
+  GlobalLock := TCriticalSection.Create;
 end.
