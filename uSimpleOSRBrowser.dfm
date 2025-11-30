@@ -23,9 +23,9 @@ object Form1: TForm1
   OnShow = FormShow
   TextHeight = 13
   object Image1: TImage
-    Left = 1029
+    Left = 1030
     Top = 112
-    Width = 77
+    Width = 81
     Height = 33
   end
   object Image2: TImage
@@ -39,6 +39,13 @@ object Form1: TForm1
     Top = 112
     Width = 81
     Height = 33
+  end
+  object Label1: TLabel
+    Left = 1029
+    Top = 240
+    Width = 27
+    Height = 13
+    Caption = 'Delay'
   end
   object Panel1: TBufferPanel
     Left = -1
@@ -66,6 +73,18 @@ object Form1: TForm1
     OnMouseUp = Panel1MouseUp
     OnResize = Panel1Resize
     OnMouseLeave = Panel1MouseLeave
+    object panelOverlay: TPanel
+      Left = 1
+      Top = 0
+      Width = 1023
+      Height = 769
+      BevelInner = bvRaised
+      BevelKind = bkSoft
+      BevelOuter = bvLowered
+      BorderWidth = 10
+      BorderStyle = bsSingle
+      TabOrder = 0
+    end
   end
   object NavControlPnl: TPanel
     Left = 0
@@ -151,23 +170,23 @@ object Form1: TForm1
     Top = 36
     Width = 114
     Height = 49
-    Caption = 'Button2'
+    Caption = 'Start'
     TabOrder = 1
     OnClick = Button2Click
   end
   object Memo1: TMemo
     Left = 1112
-    Top = 384
+    Top = 280
     Width = 172
-    Height = 416
+    Height = 520
     ScrollBars = ssVertical
     TabOrder = 3
   end
   object memoKingdoms: TMemo
     Left = 1032
-    Top = 384
+    Top = 280
     Width = 74
-    Height = 416
+    Height = 520
     Lines.Strings = (
       '142'
       '147'
@@ -195,7 +214,7 @@ object Form1: TForm1
     Top = 40
     Width = 89
     Height = 45
-    Caption = 'Button3'
+    Caption = 'Stop'
     TabOrder = 5
     OnClick = Button3Click
   end
@@ -205,7 +224,7 @@ object Form1: TForm1
     Width = 66
     Height = 21
     TabOrder = 6
-    Text = 'Edit1'
+    Text = 'Kingdom'
   end
   object Edit2: TEdit
     Left = 1120
@@ -213,7 +232,7 @@ object Form1: TForm1
     Width = 79
     Height = 21
     TabOrder = 7
-    Text = 'Edit2'
+    Text = 'X'
   end
   object Edit3: TEdit
     Left = 1205
@@ -221,7 +240,29 @@ object Form1: TForm1
     Width = 78
     Height = 21
     TabOrder = 8
-    Text = 'Edit3'
+    Text = 'Y'
+  end
+  object chkBrowserLock: TCheckBox
+    Left = 1029
+    Top = 208
+    Width = 97
+    Height = 17
+    Caption = 'BrowserLock'
+    Checked = True
+    State = cbChecked
+    TabOrder = 9
+    OnClick = chkBrowserLockClick
+  end
+  object seDelay: TSpinEdit
+    Left = 1077
+    Top = 237
+    Width = 54
+    Height = 22
+    Increment = 10
+    MaxValue = 1000
+    MinValue = 10
+    TabOrder = 10
+    Value = 50
   end
   object chrmosr: TChromium
     OnCanFocus = chrmosrCanFocus

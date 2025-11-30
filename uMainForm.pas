@@ -77,7 +77,7 @@ type
 
 var
   MainForm: TMainForm;
-  haveError:boolean;
+  globalError:boolean;
   GlobalLock: TCriticalSection;
 
 procedure CreateGlobalCEFApp;
@@ -113,7 +113,7 @@ begin
    outputdebugstring('got some error');
    GlobalLock.Enter; // Acquire the lock
   try
-   haveError:=true;
+   globalError:=true;
   finally
     GlobalLock.Leave; // Release the lock immediately when done
   end;
@@ -238,7 +238,7 @@ begin
   FBrowserCount := 0;
 
   initialized := false;
-  haveError:=false;
+  globalError:=false;
 end;
 
 procedure TMainForm.NewBtnClick(Sender: TObject);
