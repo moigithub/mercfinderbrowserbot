@@ -1,8 +1,8 @@
 object Form1: TForm1
   Left = 0
   Top = 0
-  Width = 1300
-  Height = 872
+  Width = 1501
+  Height = 957
   AutoScroll = True
   Caption = 'Simple OSR Browser - Initializing browser. Please wait...'
   Color = clBtnFace
@@ -23,35 +23,35 @@ object Form1: TForm1
   OnShow = FormShow
   TextHeight = 13
   object Image1: TImage
-    Left = 1030
+    Left = 1190
     Top = 112
-    Width = 81
+    Width = 51
     Height = 33
   end
   object Image2: TImage
-    Left = 1117
+    Left = 1247
     Top = 112
-    Width = 81
+    Width = 53
     Height = 33
   end
   object Image3: TImage
-    Left = 1204
+    Left = 1306
     Top = 112
-    Width = 81
+    Width = 53
     Height = 33
   end
   object Label1: TLabel
-    Left = 1029
-    Top = 240
+    Left = 1190
+    Top = 237
     Width = 27
     Height = 13
     Caption = 'Delay'
   end
   object Panel1: TBufferPanel
-    Left = -1
+    Left = 0
     Top = 32
-    Width = 1024
-    Height = 768
+    Width = 1163
+    Height = 881
     OnIMECancelComposition = Panel1IMECancelComposition
     OnIMECommitText = Panel1IMECommitText
     OnIMESetComposition = Panel1IMESetComposition
@@ -84,12 +84,13 @@ object Form1: TForm1
       BorderWidth = 10
       BorderStyle = bsSingle
       TabOrder = 0
+      Visible = False
     end
   end
   object NavControlPnl: TPanel
     Left = 0
     Top = 0
-    Width = 1285
+    Width = 1485
     Height = 30
     Align = alTop
     BevelOuter = bvNone
@@ -109,7 +110,7 @@ object Form1: TForm1
       OnEnter = AddressCbEnter
     end
     object Panel2: TPanel
-      Left = 1155
+      Left = 1355
       Top = 5
       Width = 125
       Height = 20
@@ -166,26 +167,26 @@ object Form1: TForm1
     end
   end
   object Button2: TButton
-    Left = 1029
+    Left = 1169
     Top = 36
-    Width = 114
+    Width = 96
     Height = 49
     Caption = 'Start'
     TabOrder = 1
     OnClick = Button2Click
   end
   object Memo1: TMemo
-    Left = 1112
+    Left = 1224
     Top = 280
-    Width = 172
+    Width = 253
     Height = 520
     ScrollBars = ssVertical
     TabOrder = 3
   end
   object memoKingdoms: TMemo
-    Left = 1032
+    Left = 1169
     Top = 280
-    Width = 74
+    Width = 49
     Height = 520
     Lines.Strings = (
       '142'
@@ -210,8 +211,8 @@ object Form1: TForm1
     TabOrder = 4
   end
   object Button3: TButton
-    Left = 1176
-    Top = 40
+    Left = 1271
+    Top = 38
     Width = 89
     Height = 45
     Caption = 'Stop'
@@ -219,43 +220,41 @@ object Form1: TForm1
     OnClick = Button3Click
   end
   object Edit1: TEdit
-    Left = 1029
-    Top = 168
-    Width = 66
+    Left = 1190
+    Top = 151
+    Width = 51
     Height = 21
     TabOrder = 6
-    Text = 'Kingdom'
+    Text = '0'
   end
   object Edit2: TEdit
-    Left = 1120
-    Top = 168
-    Width = 79
+    Left = 1247
+    Top = 151
+    Width = 53
     Height = 21
     TabOrder = 7
-    Text = 'X'
+    Text = '0'
   end
   object Edit3: TEdit
-    Left = 1205
-    Top = 168
-    Width = 78
+    Left = 1306
+    Top = 151
+    Width = 57
     Height = 21
     TabOrder = 8
-    Text = 'Y'
+    Text = '0'
   end
   object chkBrowserLock: TCheckBox
-    Left = 1029
-    Top = 208
+    Left = 1190
+    Top = 211
     Width = 97
     Height = 17
     Caption = 'BrowserLock'
-    Checked = True
-    State = cbChecked
     TabOrder = 9
     OnClick = chkBrowserLockClick
   end
   object seDelay: TSpinEdit
-    Left = 1077
-    Top = 237
+    Left = 1238
+    Top = 234
     Width = 54
     Height = 22
     Increment = 10
@@ -263,6 +262,42 @@ object Form1: TForm1
     MinValue = 10
     TabOrder = 10
     Value = 50
+  end
+  object chkToRight: TCheckBox
+    Left = 1380
+    Top = 153
+    Width = 97
+    Height = 17
+    Caption = 'Going Right ?'
+    Checked = True
+    State = cbChecked
+    TabOrder = 11
+  end
+  object Button4: TButton
+    Left = 1169
+    Top = 806
+    Width = 49
+    Height = 33
+    Caption = 'Button4'
+    TabOrder = 12
+    OnClick = Button4Click
+  end
+  object chkReloading: TCheckBox
+    Left = 1384
+    Top = 256
+    Width = 97
+    Height = 17
+    Caption = 'chkReloading'
+    TabOrder = 13
+  end
+  object btnRotate: TButton
+    Left = 1169
+    Top = 845
+    Width = 50
+    Height = 25
+    Caption = 'Rotate'
+    TabOrder = 14
+    OnClick = btnRotateClick
   end
   object chrmosr: TChromium
     OnCanFocus = chrmosrCanFocus
@@ -272,6 +307,8 @@ object Form1: TForm1
     OnBeforePopup = chrmosrBeforePopup
     OnAfterCreated = chrmosrAfterCreated
     OnBeforeClose = chrmosrBeforeClose
+    OnRenderProcessUnresponsive = chrmosrRenderProcessUnresponsive
+    OnRenderProcessTerminated = chrmosrRenderProcessTerminated
     OnGetViewRect = chrmosrGetViewRect
     OnGetScreenPoint = chrmosrGetScreenPoint
     OnGetScreenInfo = chrmosrGetScreenInfo
@@ -301,5 +338,11 @@ object Form1: TForm1
     OnTimer = Timer1Timer
     Left = 24
     Top = 206
+  end
+  object Timer2: TTimer
+    Enabled = False
+    OnTimer = Timer2Timer
+    Left = 1424
+    Top = 192
   end
 end
