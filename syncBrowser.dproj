@@ -2,7 +2,7 @@
     <PropertyGroup>
         <ProjectGuid>{3743027E-A484-40BE-A0A5-34E6A237A9F7}</ProjectGuid>
         <MainSource>syncBrowser.dpr</MainSource>
-        <Config Condition="'$(Config)'==''">Release</Config>
+        <Config Condition="'$(Config)'==''">Debug</Config>
         <DCC_DCCCompiler>DCC32</DCC_DCCCompiler>
         <ProjectVersion>20.1</ProjectVersion>
         <FrameworkType>VCL</FrameworkType>
@@ -138,6 +138,7 @@
             <Form>Form1</Form>
             <FormType>dfm</FormType>
         </DCCReference>
+        <DCCReference Include="uWSHandler.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -204,6 +205,12 @@
             <Deployment Version="4">
                 <DeployFile LocalName="MDIBrowser.exe" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="bin64\syncBrowser.exe" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win64">
+                        <RemoteName>syncBrowser.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="bin64\syncBrowser.exe" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win64">
                         <RemoteName>syncBrowser.exe</RemoteName>
                         <Overwrite>true</Overwrite>

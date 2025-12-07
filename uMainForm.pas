@@ -16,12 +16,13 @@ uCEFChromium, uCEFTypes, uCEFInterfaces,  uCEFBufferPanel,
 {$IFDEF DELPHI16_UP}
   Winapi.Windows, System.SysUtils, System.Classes, Vcl.Graphics, Vcl.Forms,
   Vcl.Controls, Vcl.StdCtrls, Vcl.Dialogs, Vcl.Buttons, Winapi.Messages,
-  Vcl.ExtCtrls, Vcl.ComCtrls;
+  Vcl.ExtCtrls, Vcl.ComCtrls,
 {$ELSE}
 Windows, SysUtils, Classes, Graphics, Forms,
   Controls, StdCtrls, Dialogs, Buttons, Messages,
-  ExtCtrls, ComCtrls, Vcl.Samples.Spin;
+  ExtCtrls, ComCtrls, Vcl.Samples.Spin,
 {$ENDIF}
+uWSHandler ;
 
 const
   TRANSPARENT_BROWSER      = False;
@@ -37,6 +38,9 @@ type
     ExitBtn: TSpeedButton;
     mercImage: TImage;
     Memo1: TMemo;
+    Panel3: TPanel;
+    Label2: TLabel;
+    edtCacheNameSufix: TEdit;
 
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
@@ -59,6 +63,8 @@ type
     procedure CreateMDIChild(const Name: string; id: cardinal);
     procedure CloseAllChildForms;
     function GetChildClosing: boolean;
+
+
 
   protected
     procedure ChildDestroyedMsg(var aMessage: TMessage);
@@ -119,12 +125,59 @@ begin
   end;
 end;
 
+procedure GlobalCEFApp_OnWebKitInitialized ;
+var
+  JSCode: ustring;
+begin
+  // This JavaScript code is executed immediately when the render process starts.
+  // It defines a JS object 'window.wsHandler' with a function 'sendWebSocketData'
+  // that calls the 'native function' handled by TWSHandler.Execute.
+  JSCode :=
+    'var wsHandler;' +
+    'if (!wsHandler)' +
+    '  wsHandler = {};' +
+    '(function() {' +
+    '  wsHandler.sendWebSocketData = function(data) {' +
+    '    native function SendData();' +
+    '    return SendData(data);' +
+    '  };' +
+    '})();' +
+    // Now, immediately after defining the handler bridge, we inject the WebSocket proxy logic
+    // to override the default WebSocket and hook it up to our new 'wsHandler' bridge function.
+    'const OriginalWebsocket = window.WebSocket;' +
+    'window.WebSocket = function(...args) {' +
+    '    const ws = new OriginalWebsocket(...args);' +
+    '    const originalAddEventListener = ws.addEventListener;' +
+    '    ws.addEventListener = function(event, callback) {' +
+    '        if (event === "message") {' +
+    '            const originalCallback = callback;' +
+    '            callback = function(e) {' +
+    '                wsHandler.sendWebSocketData(e.data); // Calls Delphi Code!' +
+    '                return originalCallback.apply(this, arguments);' +
+    '            };' +
+    '        }' +
+    '        return originalAddEventListener.apply(this, [event, callback]);' +
+    '    };' +
+    '    return ws;' +
+    '};';
+
+  // Register the extension with a unique name ('wsExtension') and the JS code,
+  // linking it to a new instance of our TWSHandler.
+  CefRegisterExtension('wsExtension', JSCode, TWSHandler.Create as ICefv8Handler);
+end;
+
 procedure CreateGlobalCEFApp;
 begin
   // GlobalCEFApp.RootCache must be the parent of all cache directories
   // used by the browsers in the application.
   GlobalCEFApp := TCefApplication.Create;
+
+  //TODO: hacer que la extension funcione
+
+  //    GlobalCEFApp.OnWebKitInitialized := GlobalCEFApp_OnWebKitInitialized;
   GlobalCEFApp.OnContextInitialized := GlobalCEFApp_OnContextInitialized;
+
+
   GlobalCEFApp.RootCache := ExtractFileDir(ParamStr(0)) + '\RootCache';
 //  GlobalCEFApp.cache := GlobalCEFApp.RootCache + '\cache';
   GlobalCEFApp.LogFile := 'debug.log';
@@ -147,18 +200,22 @@ begin
     GlobalCEFApp.BackgroundColor := CefColorSetARGB($FF, $FF, $FF, $FF);
 end;
 
+
+
 procedure TMainForm.CreateMDIChild(const Name: string; id: cardinal);
 var
    TempChild: TForm1; // TChildForm;
-
+   cacheNameSufix:string;
 begin
-   TempChild := TForm1.Create(Self);
+   cacheNameSufix:=trim(edtCacheNameSufix.Text);
+   TempChild := TForm1.Create(Self,id,cacheNameSufix,templateGoToLocation,TemplateImg);
 
-  TempChild.Caption := Name;
-  TempChild.id := id;
-
-  TempChild.templateGoToLocation:=templateGoToLocation;
-  TempChild.TemplateImg:=TemplateImg;
+//  TempChild.Caption := Name;
+//  TempChild.id := id;
+//  TempChild.cacheNameSufix:=trim(edtCacheNameSufix.Text);
+//
+//  TempChild.templateGoToLocation:=templateGoToLocation;
+//  TempChild.TemplateImg:=TemplateImg;
 end;
 
 procedure TMainForm.CloseAllChildForms;

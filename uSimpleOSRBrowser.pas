@@ -77,6 +77,15 @@ type
     Button4: TButton;
     chkReloading: TCheckBox;
     btnRotate: TButton;
+    Button5: TButton;
+    seConst: TSpinEdit;
+    seBlocksize: TSpinEdit;
+    btnCrash: TButton;
+    Button6: TButton;
+
+    constructor Create(AOwner: TComponent; const id: cardinal;
+      cacheNameSufix: string; templateGoToLocation, TemplateImg: pCvMat_t);
+      reintroduce;
 
     procedure AppEventsMessage(var Msg: tagMSG; var Handled: Boolean);
 
@@ -182,11 +191,26 @@ type
     procedure chkBrowserLockClick(Sender: TObject);
     procedure Timer2Timer(Sender: TObject);
     procedure Button4Click(Sender: TObject);
-    procedure chrmosrRenderProcessUnresponsive(Sender: TObject; const browser: ICefBrowser;
+    procedure chrmosrRenderProcessUnresponsive(Sender: TObject;
+      const browser: ICefBrowser;
       const callback: ICefUnresponsiveProcessCallback; var aResult: Boolean);
-    procedure chrmosrRenderProcessTerminated(Sender: TObject; const browser: ICefBrowser;
-      status: TCefTerminationStatus; error_code: Integer; const error_string: ustring);
+    procedure chrmosrRenderProcessTerminated(Sender: TObject;
+      const browser: ICefBrowser; status: TCefTerminationStatus;
+      error_code: Integer; const error_string: ustring);
     procedure btnRotateClick(Sender: TObject);
+    procedure chrmosrClose(Sender: TObject; const browser: ICefBrowser;
+      var aAction: TCefCloseBrowserAction);
+    procedure Button5Click(Sender: TObject);
+    procedure btnCrashClick(Sender: TObject);
+    procedure chrmosrJsdialog(Sender: TObject; const browser: ICefBrowser;
+      const originUrl: ustring; dialogType: TCefJsDialogType;
+      const messageText, defaultPromptText: ustring;
+      const callback: ICefJsDialogCallback;
+      out suppressMessage, Result: Boolean);
+    procedure chrmosrProcessMessageReceived(Sender: TObject;
+      const browser: ICefBrowser; const frame: ICefFrame;
+      sourceProcess: TCefProcessId; const message: ICefProcessMessage;
+      out Result: Boolean);
 
   protected
     FPopUpBitmap: TBitmap;
@@ -212,11 +236,23 @@ type
     FPendingMsgID: Integer;
     FDevToolsMsgValue: ustring;
 
-    prevYCoords:integer;
-
+    FJSDialogInfoCS: TCriticalSection;
+    FOriginUrl: ustring;
+    FMessageText: ustring;
+    FDefaultPromptText: ustring;
+    FPendingDlg: Boolean;
+    FDialogType: TCefJsDialogType;
+    FCallback: ICefJsDialogCallback;
 
     FTask: ITask;
     haveClientError: Boolean;
+    FBrowserCrashed: Boolean;
+
+    Fid: cardinal;
+    cacheNameSufix: string;
+    templateGoToLocation, TemplateImg: pCvMat_t;
+
+    procedure RestartBrowser;
 
     function getModifiers(Shift: TShiftState): TCefEventFlags;
     function GetButton(Button: TMouseButton): TCefMouseButtonType;
@@ -247,28 +283,39 @@ type
     procedure DevToolsDataAvailableMsg(var aMessage: TMessage);
       message MINIBROWSER_DTDATA_AVLBL;
 
+    procedure ShowJSDialogMsg(var aMessage: TMessage);
+      message CEFBROWSER_SHOWJSDIALOG;
+
     procedure SynchronizeMouseEvent(EventType: string;
       Button: TMouseButton = mbLeft; Shift: TShiftState = []; X: Integer = 0;
       Y: Integer = 0);
 
     function GetInitialized: Boolean;
+    function haveGlobalError: Boolean;
+    function haveFormError: Boolean;
   public
-    id: cardinal;
-    // screenshot: TBitmap;
 
-    templateGoToLocation, TemplateImg: pCvMat_t;
+    // screenshot: TBitmap;
 
     procedure captureScreenshot;
     function searchImage(TemplateImg: pCvMat_t; threshold: Double): Boolean;
     procedure sendESCKey;
     procedure sendBackspaceKey(keycode: byte);
+    procedure InvertTBitmapColors(Bitmap: TBitmap);
     procedure ConvertToGrayscale(Bitmap: TBitmap);
     procedure inputdata(chars: string);
-    function getXCoords(const prevCoordX: Integer; out coordX: Integer): Boolean;
+    function GoToCoords(kingdom, sCoordX, sCoordY: string): Boolean;
+    function getXCoords(const prevCoordX: Integer; out coordX: Integer)
+      : Boolean;
     function getYCoords(const prevCoord: Integer; out coord: Integer): Boolean;
+    function searchMerc: Boolean;
+    function panDownn: Boolean;
+    function panRightt: Boolean;
+    function panLeftt: Boolean;
 
     property Closing: Boolean read FClosing;
     property Initialized: Boolean read GetInitialized;
+    property id: cardinal read Fid;
   end;
 
 var
@@ -557,6 +604,33 @@ begin
     end;
 end;
 
+function TForm1.haveGlobalError: Boolean;
+var
+  err1 : Boolean;
+begin
+  GlobalLock.Enter; // Acquire the lock
+  try
+    err1 := globalError;
+
+  finally
+    GlobalLock.Leave; // Release the lock immediately when done
+  end;
+
+
+
+  Result := err1 ;
+end;
+
+function TForm1.haveFormError: Boolean;
+
+begin
+
+
+
+
+  Result := haveClientError;
+end;
+
 procedure TForm1.GoBtnClick(Sender: TObject);
 begin
   FResizeCS.Acquire;
@@ -599,6 +673,77 @@ begin
   PostMessage(Handle, WM_CLOSE, 0, 0);
 end;
 
+procedure TForm1.chrmosrJsdialog(Sender: TObject; const browser: ICefBrowser;
+  const originUrl: ustring; dialogType: TCefJsDialogType;
+  const messageText, defaultPromptText: ustring;
+  const callback: ICefJsDialogCallback; out suppressMessage, Result: Boolean);
+begin
+  // In this event we must store the dialog information and post a message to the main form to show the dialog
+  FJSDialogInfoCS.Acquire;
+
+  outputdebugstring('chrmosrJsdialog');
+  outputdebugstring('chrmosrJsdialog');
+  outputdebugstring('chrmosrJsdialog');
+
+  if FPendingDlg then
+  begin
+    Result := False;
+    suppressMessage := True;
+  end
+  else
+  begin
+    FOriginUrl := originUrl;
+    FMessageText := messageText;
+    FDefaultPromptText := defaultPromptText;
+    FDialogType := dialogType;
+    FCallback := callback;
+    FPendingDlg := True;
+    Result := True;
+    suppressMessage := False;
+
+    PostMessage(Handle, CEFBROWSER_SHOWJSDIALOG, 0, 0);
+  end;
+
+  FJSDialogInfoCS.Release;
+end;
+
+procedure TForm1.ShowJSDialogMsg(var aMessage: TMessage);
+var
+  TempCaption: string;
+begin
+  // Here we show the dialog and reset the information.
+  // showmessage, MessageDlg and InputBox should be replaced by nicer custom forms with the same functionality.
+
+  FJSDialogInfoCS.Acquire;
+
+  outputdebugstring('ShowJSDialogMsg');
+
+  if FPendingDlg then
+  begin
+    TempCaption := 'JavaScript message from : ' + FOriginUrl;
+
+    case FDialogType of
+      JSDIALOGTYPE_ALERT:
+        showmessage(TempCaption + CRLF + CRLF + FMessageText);
+      JSDIALOGTYPE_CONFIRM:
+        FCallback.cont((MessageDlg(TempCaption + CRLF + CRLF + FMessageText,
+          mtConfirmation, [mbYes, mbNo], 0, mbYes) = mrYes), '');
+      JSDIALOGTYPE_PROMPT:
+        FCallback.cont(True, InputBox(TempCaption, FMessageText,
+          FDefaultPromptText));
+    end;
+  end;
+
+  FOriginUrl := '';
+  FMessageText := '';
+  FDefaultPromptText := '';
+  FPendingDlg := False;
+  FDialogType := JSDIALOGTYPE_ALERT;
+  FCallback := nil;
+
+  FJSDialogInfoCS.Release;
+end;
+
 procedure TForm1.chrmosrBeforePopup(Sender: TObject; const browser: ICefBrowser;
   const frame: ICefFrame; popup_id: Integer; const targetUrl: ustring;
   const targetFrameName: ustring; targetDisposition: TCefWindowOpenDisposition;
@@ -607,6 +752,8 @@ procedure TForm1.chrmosrBeforePopup(Sender: TObject; const browser: ICefBrowser;
   var settings: TCefBrowserSettings; var extra_info: ICefDictionaryValue;
   var noJavascriptAccess: Boolean; var Result: Boolean);
 begin
+  outputdebugstring('chrmosrBeforePopup');
+
   // For simplicity, this demo blocks all popup windows and new tabs
   Result := (targetDisposition in [CEF_WOD_NEW_FOREGROUND_TAB,
     CEF_WOD_NEW_BACKGROUND_TAB, CEF_WOD_NEW_POPUP, CEF_WOD_NEW_WINDOW]);
@@ -618,6 +765,71 @@ begin
   // before being able to accept the focus. Now we can set the focus on the
   // TBufferPanel control
   PostMessage(Handle, CEF_FOCUSENABLED, 0, 0);
+end;
+
+procedure TForm1.RestartBrowser;
+var
+  OriginalURL: ustring;
+  TempContext: ICefRequestContext;
+  TempCache: string;
+begin
+  if not FBrowserCrashed then
+    Exit;
+
+  // Store the current URL to reload it later
+  OriginalURL := chrmosr.DefaultUrl;
+  FCanClose := False;
+  FClosing := False;
+
+  // You must properly destroy and re-create the TChromium instance.
+  // The exact steps depend on how you created it (DFM or dynamically).
+  // A common pattern involves:
+  // 1. Free the existing TChromium component (if dynamically created)
+  // 2. Recreate the component
+  // 3. Re-assign event handlers
+  // 4. Load the URL
+  chrmosr.CloseBrowser(True);
+
+  // Example (assuming 'chrmosr' is on your DFM and you just need to re-initialize):
+  // You might need to call specific cleanup routines based on your setup.
+  // The easiest way to handle this in a VCL form is often to hide the existing
+  // one, manage its lifecycle cleanly, or use the pattern described in
+  // CEF4Delphi demos for dynamic creation/destruction.
+
+
+  // Wait for OnAfterCreated to fire again (you need an event handler for that)
+  // or set the DefaultURL property before creating it again.
+
+  chrmosr.DefaultUrl := OriginalURL;
+
+  try
+    TempCache := GlobalCEFApp.RootCache + '\cache' + cacheNameSufix +
+      inttostr(MainForm.BrowserCount);
+    TempContext := TCefRequestContextRef.New(TempCache, '', '', False, False,
+      chrmosr.ReqContextHandler);
+
+    if chrmosr.CreateBrowser(nil, '', TempContext) then
+      chrmosr.InitializeDragAndDrop(Panel1)
+    else
+      Timer1.Enabled := True;
+  finally
+    TempContext := nil;
+  end;
+
+  FBrowserCrashed := False;
+  Memo1.Lines.Add('Browser restarted and reloading URL.');
+end;
+
+procedure TForm1.chrmosrClose(Sender: TObject; const browser: ICefBrowser;
+  var aAction: TCefCloseBrowserAction);
+begin
+  // check flag for error, and restart browser
+  if haveClientError then
+  begin
+    FBrowserCrashed := True;
+    Memo1.Lines.Add('Browser closed due to fatal crash... restarting');
+    TThread.Queue(nil, RestartBrowser);
+  end;
 end;
 
 procedure TForm1.chrmosrConsoleMessage(Sender: TObject;
@@ -656,29 +868,19 @@ begin
 
     if foundBadWord then
     begin
-//       chrmosr.JavascriptEnabled := False;     // no hace nada en una pag q ya esta ejecutando js
-       memo1.Lines.Add('Error: game crashed, reload');
-        playbeep();
-        playbeep();
-        playbeep();
-        chkReloading.checked:=true;
-       chrmosr.Reload;
+      Memo1.Lines.Add('Error: game crashed, reload');
+      playbeep();
+      playbeep();
+      playbeep();
+      chkReloading.Checked := True;
 
-      if (FTask <> nil) and (FTask.Status = TTaskStatus.Running) then
+      chrmosr.Reload;
+
+      if (FTask <> nil) and (FTask.status = TTaskStatus.Running) then
       begin
         FTask.Cancel;
       end;
 
-
-
-//      if MessageDlg('Error ' + message, mtConfirmation, [mbYes, mbNo], 0, mbYes)
-//        = mrYes then
-//      begin
-//        MessageDlg('Exiting the system.', mtInformation, [mbOk], 0, mbOk);
-//
-//        outputdebugstring('deberia salir el dialogo  2');
-//        Result := True;
-//      end;
     end;
   end;
 end;
@@ -949,20 +1151,57 @@ begin
   FPopUpRect.Bottom := rect.Y + rect.height - 1;
 end;
 
-procedure TForm1.chrmosrRenderProcessTerminated(Sender: TObject; const browser: ICefBrowser;
-  status: TCefTerminationStatus; error_code: Integer; const error_string: ustring);
+procedure TForm1.chrmosrProcessMessageReceived(Sender: TObject;
+  const browser: ICefBrowser; const frame: ICefFrame;
+  sourceProcess: TCefProcessId; const message: ICefProcessMessage;
+  out Result: Boolean);
+var
+  MessageName: ustring;
+  Args: ICefListValue;
+  WebSocketData: ustring;
 begin
-memo1.Lines.add('chrmosrRenderProcessTerminated');
+  MessageName := message.GetName;
+
+  if MessageName = 'WebSocketDataMessage' then
+  // Match the message name from Step 1
+  begin
+    Args := message.GetArgumentList;
+    if Args.GetSize > 0 then
+    begin
+      // Extract the string we put at index 0
+      WebSocketData := Args.GetString(0);
+
+      // Update UI safely on the main VCL thread
+      TThread.Synchronize(nil,
+        procedure
+        begin
+          Memo1.Lines.Add('WS Data via IPC: ' + WebSocketData);
+        end);
+
+      Result := True; // We handled the message
+    end;
+  end;
+
 end;
 
-procedure TForm1.chrmosrRenderProcessUnresponsive(Sender: TObject; const browser: ICefBrowser;
-  const callback: ICefUnresponsiveProcessCallback; var aResult: Boolean);
+procedure TForm1.chrmosrRenderProcessTerminated(Sender: TObject;
+const browser: ICefBrowser; status: TCefTerminationStatus; error_code: Integer;
+const error_string: ustring);
 begin
-memo1.Lines.add('chrmosrRenderProcessUnresponsive');
+  outputdebugstring('chrmosrRenderProcessTerminated');
+  Memo1.Lines.Add('chrmosrRenderProcessTerminated');
+end;
+
+procedure TForm1.chrmosrRenderProcessUnresponsive(Sender: TObject;
+const browser: ICefBrowser; const callback: ICefUnresponsiveProcessCallback;
+var aResult: Boolean);
+begin
+  outputdebugstring('chrmosrRenderProcessUnresponsive');
+  Memo1.Lines.Add('chrmosrRenderProcessUnresponsive');
 end;
 
 procedure TForm1.chrmosrTooltip(Sender: TObject; const browser: ICefBrowser;
-  var text: ustring; out Result: Boolean);
+var text: ustring; out Result: Boolean);
 begin
   Panel1.hint := text;
   Panel1.ShowHint := (length(text) > 0);
@@ -1058,15 +1297,23 @@ begin
 
 end;
 
+procedure TForm1.btnCrashClick(Sender: TObject);
+begin
+
+  chrmosr.ExecuteJavaScript('alert("Hello from Delphi!");',
+    chrmosr.browser.MainFrame.GetURL, '', '', 0);
+
+end;
+
 procedure TForm1.btnRotateClick(Sender: TObject);
 begin
-  MemoKingdoms.Lines.BeginUpdate;
+  memoKingdoms.Lines.BeginUpdate;
   try
     // Move the first line to the end of the list
-    MemoKingdoms.Lines.Add(MemoKingdoms.Lines[0]);
-    MemoKingdoms.Lines.Delete(0);
+    memoKingdoms.Lines.Add(memoKingdoms.Lines[0]);
+    memoKingdoms.Lines.Delete(0);
   finally
-    MemoKingdoms.Lines.EndUpdate;
+    memoKingdoms.Lines.EndUpdate;
   end;
 end;
 
@@ -1075,6 +1322,12 @@ var
   KeyEvent: TCefKeyEvent;
 begin
   if not Initialized then
+    Exit;
+
+  if (haveGlobalError) then
+    Exit;
+
+  if (haveFormError) then
     Exit;
 
   ZeroMemory(@KeyEvent, SizeOf(KeyEvent));
@@ -1110,6 +1363,21 @@ begin
   ShowWindow(Handle, SW_RESTORE);
 end;
 
+procedure TForm1.InvertTBitmapColors(Bitmap: TBitmap);
+var
+  R: TRect;
+begin
+  if not assigned(Bitmap) then
+    Exit;
+
+  // Define the rectangle covering the entire bitmap
+  R := rect(0, 0, Bitmap.width, Bitmap.height);
+
+  // Use the Windows API function InvertRect
+  // It inverts every pixel color value in the specified rectangle.
+  InvertRect(Bitmap.Canvas.Handle, R);
+end;
+
 procedure TForm1.ConvertToGrayscale(Bitmap: TBitmap);
 var
   X, Y: Integer;
@@ -1142,10 +1410,14 @@ begin
 end;
 
 function TForm1.getXCoords(const prevCoordX: Integer;
-  out coordX: Integer): Boolean;
+out coordX: Integer): Boolean;
 var
   coordsBMP: TBitmap;
   Match: TMatch;
+
+  w, h: Integer;
+  SrcImg, GrayImg, DenoisedImg, BinaryImg: pCvMat_t;
+
 begin
   Result := False;
   {
@@ -1204,6 +1476,7 @@ begin
     coordsBMP := nil;
     try
       coordsBMP := TBitmap.Create;
+      coordsBMP.PixelFormat := pf24bit;
       coordsBMP.width := 35;
       coordsBMP.height := 20;
 
@@ -1212,8 +1485,80 @@ begin
         BitBlt(coordsBMP.Canvas.Handle, 0, 0, coordsBMP.width, coordsBMP.height,
           Panel1.buffer.Canvas.Handle, 82, Panel1.height - 29, SRCCOPY);
 
-        ConvertToGrayscale(coordsBMP);
+        // ConvertToGrayscale(coordsBMP);
+        // ConvertGrayToBlackAndWhite(coordsBMP);    // no funciona
+{$REGION 'preprocess image'}
+        // outputdebugstring('1. copied and grayscale');
+        // // --- 1. Load the image using OpenCVWrapper ---
+        SrcImg := pCvMatImageCreate(coordsBMP.width, coordsBMP.height, CV_8UC3);
+        Bitmap2MatImage(SrcImg, coordsBMP);
+        //
+        // outputdebugstring('2. loaded into opencv');
+        //
+        // // --- 2. Convert to Grayscale ---
+        // // Ensure the destination matrix has one channel (CV_8UC1)
+        w := pCvMatGetWidth(SrcImg);
+        h := pCvMatGetHeight(SrcImg);
+        //
+        GrayImg := pCvMatImageCreate(w, h, CV_8UC1); // 8-bit, 1 channel
+        pCvcvtColor(SrcImg, GrayImg, ord(COLOR_BGR2GRAY));
+        //
+        // outputdebugstring('3. opencv: grayscaled');
 
+        // --- 3. Noise Reduction (Median Filter) ---
+        // Allocate the destination matrix
+        // w:=pCvMatGetWidth(SrcImg);
+        // h:=pCvMatGetHeight(SrcImg);
+        //
+        // DenoisedImg := pCvMatImageCreate(w, h, CV_8UC1);
+        // pCvmedianBlur(GrayImg, DenoisedImg, 1); // 3x3 kernel
+        //
+        // outputdebugstring('4. opencv: pCvmedianBlur');
+
+
+        // 4. Binarization using Adaptive Thresholding
+        // This method handles uneven lighting well, which is common in photos of numbers
+        // THRESH_BINARY_INV means background is white, foreground (numbers) is black.
+        // adaptiveThreshold(DenoisedImg, BinaryImg, 255, ADAPTIVE_THRESH_MEAN_C, THRESH_BINARY_INV, 11, 2);
+        // (Source, MaxValue, Adaptive Method: Mean, Threshold Type, Block Size: 11x11, C: 2)
+
+        // Allocate the destination matrix
+
+        // w:=pCvMatGetWidth(SrcImg);
+        // h:=pCvMatGetHeight(SrcImg);
+        //
+        // BinaryImg := pCvMatImageCreate(w, h, CV_8UC1);
+
+
+
+
+        // pCvadaptiveThreshold(src: PCvMat_t; dst: PCvMat_t; maxValue: Double;
+        // adaptiveMethod: Integer; thresholdType: Integer;
+        // blockSize: Integer; C: Double);
+
+        // TCvAdaptiveThresholdTypes = (  ADAPTIVE_THRESH_MEAN_C =  0,  ADAPTIVE_THRESH_GAUSSIAN_C =  1  );
+        // TCvThresholdTypes = (  THRESH_BINARY =  0,  THRESH_BINARY_INV =  1,  THRESH_TRUNC =  2,
+        // THRESH_TOZERO =  3,  THRESH_TOZERO_INV =  4,  THRESH_MASK =  7,
+        // THRESH_OTSU =  8,  THRESH_TRIANGLE =  16  );
+
+        // pCvadaptiveThreshold(
+        // GrayImg,        // src
+        // BinaryImg,          // dst
+        // 255,                // maxValue (white)
+        // Ord(TCvAdaptiveThresholdTypes.ADAPTIVE_THRESH_MEAN_C), // adaptiveMethod (Use mean average of local block)
+        // Ord(TCvThresholdTypes.THRESH_BINARY_INV),  // thresholdType (Dark numbers on light background)
+        // seBlocksize.Value, // 11,                 // blockSize (11x11 is standard)
+        // seConst.Value //  2                   // C (Constant subtracted from mean)
+        // );
+
+        // outputdebugstring('5. opencv: binarized');
+
+        // SrcImg := pCvMatImageCreate(coordsBMP.Width, coordsBMP.Height, CV_8UC3);
+        pCvcvtColor(GrayImg, SrcImg, ord(COLOR_GRAY2BGR));
+        // convert back gray to color, use 3 channels
+        MatImage2Bitmap(SrcImg, coordsBMP);
+
+{$ENDREGION 'preprocess image'}
         if assigned(Image2) then
           Image2.Picture.Assign(coordsBMP);
 
@@ -1224,26 +1569,20 @@ begin
             var
             data := tesseract.RecognizeAsText(True);
             var
-            value := '';
+            value := data;
             Match := TRegex.Match(data, '\d+');
             if Match.success then
-              value := Match.value
-            else
-              value := data;
-
-            Edit2.text := value;
+              value := Match.value;
 
             coordX := prevCoordX;
             // default value, if convertion fails, it will reuse prev coord
             Result := tryStrToInt(value, coordX);
+
+            if Result then
+              Edit2.text := inttostr(coordX)
+            else
+              Edit2.text := inttostr(prevCoordX);
             // will update coordX if value is ok/integer
-
-//            if not Result then
-//            begin
-//              Memo1.Lines.Add('failed ocr ' + value + ' X= ' + inttostr(coordX)
-//                + ' PX= ' + inttostr(prevCoordX));
-//            end;
-
           end;
         end;
       end;
@@ -1254,13 +1593,22 @@ begin
     end;
 
   finally
+    // if assigned(SrcImg) then
+    // pCvMatDelete(SrcImg);
+    // if assigned(GrayImg) then
+    // pCvMatDelete(GrayImg);
+    // if assigned(DenoisedImg) then
+    // pCvMatDelete(DenoisedImg);
+    // if assigned(BinaryImg) then
+    // pCvMatDelete(BinaryImg);
+
     FResizeCS.Release;
   end;
 
 end;
 
 function TForm1.getYCoords(const prevCoord: Integer;
-  out coord: Integer): Boolean;
+out coord: Integer): Boolean;
 var
   coordsBMP: TBitmap;
   Match: TMatch;
@@ -1272,14 +1620,13 @@ begin
     PSM_SPARSE_TEXT_OSD, PSM_RAW_LINE, PSM_COUNT);
   }
 
-
-
   // Y coords
   try
     FResizeCS.Acquire;
     coordsBMP := nil;
     try
       coordsBMP := TBitmap.Create;
+      // coordsBMP.PixelFormat := pf24bit;
       coordsBMP.width := 35;
       coordsBMP.height := 20;
 
@@ -1289,6 +1636,7 @@ begin
           Panel1.buffer.Canvas.Handle, 130, Panel1.height - 29, SRCCOPY);
 
         ConvertToGrayscale(coordsBMP);
+        InvertTBitmapColors(coordsBMP);
 
         if assigned(Image3) then
           Image3.Picture.Assign(coordsBMP);
@@ -1300,25 +1648,20 @@ begin
             var
             data := tesseract.RecognizeAsText(True);
             var
-            value := '';
+            value := data;
             Match := TRegex.Match(data, '\d+');
             if Match.success then
-              value := Match.value
-            else
-              value := data;
-
-            Edit3.text := value;
+              value := Match.value;
 
             coord := prevCoord;
             // default value, if convertion fails, it will reuse prev coord
             Result := tryStrToInt(value, coord);
-            // will update coordX if value is ok/integer
 
-            if not Result then
-            begin
-              Memo1.Lines.Add('failed ocr ' + value + ' X= ' + inttostr(coord)
-                + ' PX= ' + inttostr(prevCoord));
-            end;
+            if Result then
+              Edit3.text := inttostr(coord)
+            else
+              Edit3.text := inttostr(prevCoord);
+            // will update coordX if value is ok/integer
 
           end;
         end;
@@ -1335,9 +1678,356 @@ begin
 
 end;
 
-procedure TForm1.Button2Click(Sender: TObject);
+function TForm1.GoToCoords(kingdom, sCoordX, sCoordY: string): Boolean;
+const
+  searchButtonPosX = 90;
+  searchButtonPosY = 655;
+  kindomInputPosX = 481;
+  kindomInputPosY = 416;
+  XInputPosX = 583;
+  XInputPosY = 416;
+  YInputPosX = 686;
+  YInputPosY = 416;
+  goButtonPosX = 583;
+  goButtonPosY = 464;
+var
+  WindowFound: Boolean;
+  CurrentAttempt, MaxAttempts: Integer;
+begin
+  Result := False;
+
+  // search icon button  90, 655
+  MouseMove([], searchButtonPosX, searchButtonPosY);
+  MouseDown(mbLeft, [], searchButtonPosX, searchButtonPosY);
+  sleep(10);
+  MouseUp(mbLeft, [], searchButtonPosX, searchButtonPosY);
+
+  sleep(40);
+
+  // outputdebugstring('search starting goto loca');
+
+  WindowFound := False;
+  MaxAttempts := 3;
+  CurrentAttempt := 0;
+
+  while (not WindowFound) and (CurrentAttempt < MaxAttempts) do
+  begin
+    Inc(CurrentAttempt);
+
+    // Use OpenCV to check the bitmap
+    if assigned(templateGoToLocation) then
+      WindowFound := searchImage(templateGoToLocation, 0.6)
+    else
+      WindowFound := False;
+
+    if not WindowFound then
+      sleep(200); // Wait before the next attempt
+  end;
+
+  if not WindowFound and (CurrentAttempt = MaxAttempts) then
+  begin
+
+    Memo1.Lines.Add('cant enter kingdom coords ');
+    chrmosr.Reload;
+
+    Exit;
+  end;
+
+  // --- Step 3: Act if found, or exit if timeout ---
+  if WindowFound then
+  begin
+
+    // // kindom 481,416
+    MouseMove([], kindomInputPosX, kindomInputPosY);
+    MouseDown(mbLeft, [], kindomInputPosX, kindomInputPosY);
+    sleep(10);
+    MouseUp(mbLeft, [], kindomInputPosX, kindomInputPosY);
+
+    sleep(40);
+
+    sendBackspaceKey(VK_BACK);
+    sendBackspaceKey(VK_BACK);
+    sendBackspaceKey(VK_BACK);
+    inputdata(kingdom);
+
+    sleep(40);
+
+    // // x 512, 360
+    MouseMove([], XInputPosX, XInputPosY);
+    MouseDown(mbLeft, [], XInputPosX, XInputPosY);
+    sleep(10);
+    MouseUp(mbLeft, [], XInputPosX, XInputPosY);
+
+    sleep(40);
+
+    sendBackspaceKey(VK_BACK);
+    sendBackspaceKey(VK_BACK);
+    sendBackspaceKey(VK_BACK);
+    inputdata(sCoordX);
+
+    sleep(40);
+
+    // y 615, 360
+    MouseMove([], YInputPosX, YInputPosY);
+    MouseDown(mbLeft, [], YInputPosX, YInputPosY);
+    sleep(10);
+    MouseUp(mbLeft, [], YInputPosX, YInputPosY);
+
+    sleep(40);
+
+    sendBackspaceKey(VK_BACK);
+    sendBackspaceKey(VK_BACK);
+    sendBackspaceKey(VK_BACK);
+    inputdata(sCoordY);
+
+    sleep(40);
+
+    // go button 509,402
+    MouseMove([], goButtonPosX, goButtonPosY);
+    MouseDown(mbLeft, [], goButtonPosX, goButtonPosY);
+    sleep(10);
+    MouseUp(mbLeft, [], goButtonPosX, goButtonPosY);
+  end;
+
+  Result := WindowFound;
+end;
+
+function TForm1.panDownn: Boolean;
+
+const
+  panSteps = 2;
+  posX = 920;
+  posY1 = 163;
+  posY2 = 736;
 var
   sleepDelay: Integer;
+begin
+
+  sleepDelay := seDelay.value;
+
+
+  // for var times := 0 to 1 do
+  // begin
+
+  MouseMove([], posX, posY2); // 600...210
+  MouseDown(mbLeft, [], posX, posY2);
+
+
+  // Add a small delay to allow the browser process to catch up
+  // and for the UI to register the movement realistically.
+  // sleep(sleepDelay);
+
+  var
+  distance := posY2 - posY1;
+  var
+  stepSize := distance div panSteps;
+
+  for var i := 1 to panSteps do
+  begin
+    var
+    Y := posY2 - (stepSize * i);
+    sleep(sleepDelay);
+
+    MouseMove([], posX, Y);
+
+    application.ProcessMessages;
+
+  end;
+
+  MouseMove([], posX, posY1);
+  MouseUp(mbLeft, [], posX, posY1);
+
+
+  // end; // end for loop
+
+end;
+
+function TForm1.panRightt: Boolean;
+const
+  panSteps = 2;
+  panX1 = 145;
+  panX2 = 1014;
+  panY = 426;
+var
+  sleepDelay: Integer;
+  distance, stepSize: Integer;
+begin
+  Result := False;
+
+  sleepDelay := seDelay.value;
+
+  MouseMove([], panX2, panY); // 870, 365);
+  MouseDown(mbLeft, [], panX2, panY); // 870, 365);
+
+  // Add a small delay to allow the browser process to catch up
+  // and for the UI to register the movement realistically.
+  sleep(sleepDelay);
+
+  distance := panX2 - panX1; // 870 - 180;
+
+  stepSize := distance div panSteps;
+
+  for var i := 1 to panSteps do
+  begin
+    var
+    X := panX2 - (stepSize * i);
+    MouseMove([], X, panY);
+
+    application.ProcessMessages;
+
+    sleep(sleepDelay);
+  end;
+
+  MouseMove([], panX1, panY);
+  MouseUp(mbLeft, [], panX1, panY);
+
+  sleep(sleepDelay);
+end;
+
+function TForm1.panLeftt: Boolean;
+const
+  panSteps = 2;
+  panX1 = 145;
+  panX2 = 1014;
+  panY = 426;
+var
+  sleepDelay: Integer;
+  distance, stepSize: Integer;
+begin
+  Result := False;
+
+  sleepDelay := seDelay.value;
+
+  MouseMove([], panX1, panY);
+  MouseDown(mbLeft, [], panX1, panY);
+
+  // Add a small delay to allow the browser process to catch up
+  // and for the UI to register the movement realistically.
+  sleep(sleepDelay);
+
+  distance := panX2 - panX1;
+
+  stepSize := distance div panSteps;
+
+  for var i := 1 to panSteps do
+  begin
+    var
+    X := panX1 + (stepSize * i);
+
+    MouseMove([], X, panY);
+
+    application.ProcessMessages;
+
+    sleep(sleepDelay);
+  end;
+
+  MouseMove([], panX2, panY);
+  MouseUp(mbLeft, [], panX2, panY);
+
+  sleep(sleepDelay);
+end;
+
+function TForm1.searchMerc: Boolean;
+var
+  coordsBMP: TBitmap;
+
+begin
+  Result := False;
+
+  if not Initialized then
+    Exit;
+
+  if (haveGlobalError) then
+    Exit;
+
+  if (haveFormError) then
+    Exit;
+
+
+  // Use OpenCV to check the bitmap
+  if assigned(TemplateImg) and searchImage(TemplateImg, 0.6) then
+  begin
+    playbeep();
+
+    // capture coords from mini map
+    // extract text k,x,y with tesseract ocr
+    // add to a memo
+    try
+      FResizeCS.Acquire;
+      coordsBMP := nil;
+      try
+        coordsBMP := TBitmap.Create;
+        coordsBMP.width := 160;
+        coordsBMP.height := 23;
+
+        if assigned(Panel1.buffer) and not Panel1.buffer.Empty then
+        begin
+          BitBlt(coordsBMP.Canvas.Handle, 0, 0, coordsBMP.width,
+            coordsBMP.height, Panel1.buffer.Canvas.Handle, 10,
+            Panel1.height - 30, SRCCOPY);
+
+          // coordsBMP.SaveToFile('coords.bmp');
+
+          if assigned(tesseract) and not tesseract.Busy then
+          begin
+            if tesseract.SetImage(coordsBMP) then
+            begin
+              var
+              data := tesseract.RecognizeAsText(True);
+              if assigned(Memo1) then
+              begin
+                Memo1.Lines.Add(data);
+              end;
+            end;
+          end;
+        end;
+
+      finally
+        if assigned(coordsBMP) then
+          coordsBMP.Free;
+      end;
+    finally
+      FResizeCS.Release;
+    end;
+  end;
+
+  Result := True; // success end
+
+end;
+
+procedure TForm1.Button2Click(Sender: TObject);
+const
+
+  // probablemente en procesadores mas lentos requiera mayor valor
+
+  MIN_BOUNDARY = 50;
+  MAX_BOUNDARY = 950;
+  MAX_SWEEPS = 40;
+  MAX_MAX_SWEEPS = 55;
+  TOTAL_VERTICAL_STEPS = 40;
+  startXPos = 10;
+
+  sweepDistance = 17; // game move distance:  coordX de 481 a 456
+var
+  // Match: TMatch;
+  kingdom: string;
+  totalKingdoms: Integer;
+  i: Integer;
+  sweepCount: Integer;
+
+  prevCoordX, prevCoordY: Integer;
+  sCoordX, sCoordY: String;
+
+  // haveError: TFunc<Boolean>;
+  // ProcessGameTick: TProc;
+  // GameState: TGameState;
+  // IsCoordinateValid:TFunc<integer,integer,boolean>;
+  currentXPosition: Integer;
+  err: Boolean;
+  goingRight: Boolean;
+  verticalStepsTaken: Integer;
+  sleepDelay: Integer;
+  posX, posY: Integer;
 begin
 
   if templateGoToLocation = nil then
@@ -1346,19 +2036,17 @@ begin
   if memoKingdoms.GetTextLen() = 0 then
     Exit;
 
-  if (FTask <> nil) and (FTask.Status = TTaskStatus.Running) then
+  if (FTask <> nil) and (FTask.status = TTaskStatus.Running) then
     Exit; // already running
 
   Button2.Enabled := False;
-  chkToRight.Enabled:=False;
-  timer2.Enabled:=true;
+  chkToRight.Enabled := False;
+  Timer2.Enabled := True;
 
   chkBrowserLock.Checked := True;
   // panelOverlay.Visible:=true;
 
   application.ProcessMessages;
-
-  prevYCoords:=0;
 
   // Reset error flags before starting
   haveClientError := False;
@@ -1371,314 +2059,7 @@ begin
 
   FTask := ttask.run(
     procedure
-    const
-
-      // probablemente en procesadores mas lentos requiera mayor valor
-      panSteps = 3;
-      MIN_BOUNDARY = 50;
-      MAX_BOUNDARY = 950;
-      TOTAL_VERTICAL_STEPS = 40;
-      panX1=145;
-      panX2=1014;
-      panY=426;
-    var
-      // Match: TMatch;
-      kingdom: string;
-      totalKingdoms:integer;
-      i: Integer;
-      // coordK, coordX, coordY: Integer;
-      prevCoordX: Integer;
-       sCoordX, sCoordY: String;
-      searchMerc: TProc;
-      // updateCoords: TProc;
-      panRight: TProc;
-      panDown: TProc;
-      panLeft: TProc;
-      haveError: TFunc<Boolean>;
-      // ProcessGameTick: TProc;
-      // GameState: TGameState;
-      // IsCoordinateValid:TFunc<integer,integer,boolean>;
-      currentXPosition: Integer;
-
-      goingRight: Boolean;
-      verticalStepsTaken: Integer;
-
-      // /--------------------
     begin
-      // ----------------
-{$REGION 'haveError function'}
-      haveError := function: Boolean
-        var
-          err1, err2: Boolean;
-        begin
-          GlobalLock.Enter; // Acquire the lock
-          try
-            err1 := globalError;
-          finally
-            GlobalLock.Leave; // Release the lock immediately when done
-          end;
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              err2 := haveClientError;
-            end);
-
-          Result := False;
-          if (err1 or err2) then
-            Result := True;
-        end;
-{$ENDREGION}
-      // ---------------
-
-{$REGION 'searchMerc procedure'}
-      searchMerc := procedure
-        var
-          coordsBMP: TBitmap;
-
-        begin
-          if not initialized then exit;
-
-          if (haveError) then
-            Exit;
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              // Use OpenCV to check the bitmap
-              if assigned(TemplateImg) and searchImage(TemplateImg, 0.6) then
-              begin
-                playBeep();
-
-                // capture coords from mini map
-                // extract text k,x,y with tesseract ocr
-                // add to a memo
-                try
-                  FResizeCS.Acquire;
-                  coordsBMP := nil;
-                  try
-                    coordsBMP := TBitmap.Create;
-                    coordsBMP.width := 160;
-                    coordsBMP.height := 23;
-
-                    if assigned(Panel1.buffer) and not Panel1.buffer.Empty then
-                    begin
-                      BitBlt(coordsBMP.Canvas.Handle, 0, 0, coordsBMP.width,
-                        coordsBMP.height, Panel1.buffer.Canvas.Handle, 10,
-                        Panel1.height - 30, SRCCOPY);
-
-                      // coordsBMP.SaveToFile('coords.bmp');
-
-                      if assigned(tesseract) and not tesseract.Busy then
-                      begin
-                        if tesseract.SetImage(coordsBMP) then
-                        begin
-                          var
-                          data := tesseract.RecognizeAsText(True);
-                          if assigned(Memo1) then
-                          begin
-                            Memo1.Lines.Add(data);
-                          end;
-                        end;
-                      end;
-                    end;
-
-                  finally
-                    if assigned(coordsBMP) then
-                      coordsBMP.Free;
-                  end;
-                finally
-                  FResizeCS.Release;
-                end;
-              end;
-
-            end);
-        end;
-{$ENDREGION}
-
-      // -----------
-{$REGION 'panRight procedure'}
-      panRight := procedure
-
-        begin
-          if not initialized then exit;
-
-          if (haveError) then
-            Exit;
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              sleepDelay := seDelay.value;
-            end);
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              MouseMove([], panX2,panY); //870, 365);
-              MouseDown(mbLeft, [], panX2,panY); //870, 365);
-            end);
-
-          // Add a small delay to allow the browser process to catch up
-          // and for the UI to register the movement realistically.
-          sleep(sleepDelay);
-
-          var
-          distance := panX2-panX1; //870 - 180;
-          var
-          stepSize := distance div panSteps;
-
-          for var i := 1 to panSteps do
-          begin
-            var
-            X := panX2 - (stepSize * i);
-
-
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                MouseMove([], X, panY);
-
-                application.ProcessMessages;
-              end);
-
-            sleep(sleepDelay);
-          end;
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              MouseMove([], panX1, panY);
-              MouseUp(mbLeft, [], panX1, panY);
-            end);
-
-          sleep(sleepDelay);
-        end;
-{$ENDREGION}
-      // -------------
-
-{$REGION 'panLeft procedure'}
-      panLeft := procedure
-
-        begin
-          if not initialized then exit;
-          if (haveError) then
-            Exit;
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              sleepDelay := seDelay.value;
-            end);
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              MouseMove([], panX1, panY);
-              MouseDown(mbLeft, [], panX1, panY);
-            end);
-
-          // Add a small delay to allow the browser process to catch up
-          // and for the UI to register the movement realistically.
-          sleep(sleepDelay);
-
-          var
-          distance := panX2 - panX1;
-          var
-          stepSize := distance div panSteps;
-
-          for var i := 1 to panSteps do
-          begin
-            var
-            X := panX1 + (stepSize * i);
-
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                MouseMove([], X, panY);
-
-                application.ProcessMessages;
-              end);
-
-            sleep(sleepDelay);
-          end;
-
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              MouseMove([], panX2, panY);
-              MouseUp(mbLeft, [], panX2, panY);
-            end);
-
-          sleep(sleepDelay);
-        end;
-{$ENDREGION}
-
-      // -----------------
-{$REGION 'panDown procedure'}
-      panDown := procedure
-      const
-         posX=920;
-         posY1=163;
-         posY2=736;
-        begin
-          if not initialized then exit;
-          if (haveError) then
-            Exit;
-
-          TThread.Synchronize(nil,
-            procedure
-            begin
-              sleepDelay := seDelay.value;
-            end);
-
-//          for var times := 0 to 1 do
-//          begin
-
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                MouseMove([], posX, posY2); // 600...210
-                MouseDown(mbLeft, [], posX, posY2);
-              end);
-
-            // Add a small delay to allow the browser process to catch up
-            // and for the UI to register the movement realistically.
-            // sleep(sleepDelay);
-
-            var
-            distance := posY2 - posY1;
-            var
-            stepSize := distance div panSteps;
-
-            for var i := 1 to panSteps do
-            begin
-              var
-              Y := posY2 - (stepSize * i);
-              sleep(sleepDelay);
-
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                  MouseMove([], posX, Y);
-
-                  application.ProcessMessages;
-                end);
-
-            end;
-
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                MouseMove([], posX, posY1);
-                MouseUp(mbLeft, [], posX, posY1);
-              end);
-
-//          end; // end for loop
-        end;
-{$ENDREGION}
-      // -----------------------------------
 
       // ------------ main body -------------
       // GameState.LastKnownX:=0;
@@ -1690,55 +2071,76 @@ begin
           TThread.Synchronize(nil,
             procedure
             begin
-              totalKingdoms:= memoKingdoms.Lines.Count - 1;
+              totalKingdoms := memoKingdoms.Lines.Count - 1;
             end);
 
-          for i := 0 to totalKingdoms do
+           totalKingdoms:=1;
+          for var i := 0 to totalKingdoms do
           begin
-            // if FTask.Status = TTaskStatus.Canceled then
-            // Exit;
-
-            if (haveError) then
+            if (Form1.haveGlobalError) then
+            begin
+              outputdebugstring('error 1');
               Exit;
+            end;
+
+            err:=false;
+             TThread.Synchronize(nil,
+            procedure
+            begin
+              err := haveFormError;
+            end);
+            if err then exit;
+
+
+            sweepCount := 0;
+
 
             TThread.Synchronize(nil,
-            procedure
-            var posX,posY:integer;
-            begin
-              if chkReloading.Checked then begin
-                chkReloading.Checked := false;
+              procedure
+              begin
+                if chkReloading.Checked then
+                begin
+                  chkReloading.Checked := False;
 
-                // si es reloading , tengo los 3 datos
-                kingdom := trim(edit1.text);
-                sCoordX:=trim(edit2.text);
-                sCoordY:=trim(edit3.text);
+                  // si es reloading , tengo los 3 datos
+                  kingdom := trim(Edit1.text);
+                  sCoordX := trim(Edit2.text);
+                  sCoordY := trim(Edit3.text);
 
-                if not tryStrToInt(sCoordX, posX) then begin
-                   sCoordX:='20';
+                  if not tryStrToInt(sCoordX, posX) then
+                  begin
+                    sCoordX := inttostr(startXPos);
+                  end;
+                  if not tryStrToInt(sCoordY, posY) then
+                  begin
+                    sCoordY := inttostr(startXPos);
+                  end;
+                end
+                else
+                begin
+                  // pick first
+                  kingdom := trim(memoKingdoms.Lines[0]);
+                  sCoordX := inttostr(startXPos);
+                  sCoordY := inttostr(startXPos);
+
+                  // rotate, so first goes to bottom
+                  memoKingdoms.Lines.BeginUpdate;
+                  try
+                    // Move the first line to the end of the list
+                    memoKingdoms.Lines.Add(memoKingdoms.Lines[0]);
+                    memoKingdoms.Lines.Delete(0);
+                  finally
+                    memoKingdoms.Lines.EndUpdate;
+                  end;
                 end;
-                if not tryStrToInt(sCoordY, posY) then begin
-                   sCoordY:='20';
-                end;
-              end else begin
-                kingdom := trim(memoKingdoms.Lines[i]);
-                sCoordX:='20';
-                sCoordY:='20';
 
-                memo1.lines.Add('searching on '+kingdom);
-//                 MemoKingdoms.Lines.BeginUpdate;
-//                try
-//                  // Move the first line to the end of the list
-//                  MemoKingdoms.Lines.Add(MemoKingdoms.Lines[0]);
-//                  MemoKingdoms.Lines.Delete(0);
-//                finally
-//                  MemoKingdoms.Lines.EndUpdate;
-//                end;
-              end;
+                Memo1.Lines.Add('searching on ' + kingdom);
+                Form1.Caption := 'searching on ' + kingdom;
 
-              edit1.Text:=kingdom;
-              edit2.text:=sCoordX;
-              edit3.text:=sCoordY;
-            end);
+                Edit1.text := kingdom;
+                Edit2.text := sCoordX;
+                Edit3.text := sCoordY;
+              end);
 
             if kingdom = '' then
               continue;
@@ -1754,345 +2156,282 @@ begin
 {$REGION 'enter kingdom coordinates'}
             TThread.Synchronize(nil,
               procedure
-              const
-                posX=90;
-                posY=655;
               begin
-                // search icon button  90, 655
-                MouseMove([], posX, posY);
-                MouseDown(mbLeft, [], posX, posY);
-                sleep(10);
-                MouseUp(mbLeft, [], posX, posY);
+                GoToCoords(kingdom, sCoordX, sCoordY);
               end);
-
-            sleep(100);
-
-            // outputdebugstring('search starting goto loca');
-
-            var
-            WindowFound := False;
-            var
-            MaxAttempts := 3;
-            // Try for ~10 seconds (20 * 500ms sleep + processing time)
-            var
-            CurrentAttempt := 0;
-
-            while (not WindowFound) and (CurrentAttempt < MaxAttempts) do
-            begin
-              Inc(CurrentAttempt);
-
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                  // Use OpenCV to check the bitmap
-                  if assigned(templateGoToLocation) then
-                    WindowFound := searchImage(templateGoToLocation, 0.6)
-                  else
-                    WindowFound := False;
-                end);
-
-              if not WindowFound then
-                sleep(200); // Wait before the next attempt
-            end;
-
-            if not windowFound and (CurrentAttempt=MaxAttempts) then
-            begin
-                TThread.Synchronize(nil,
-                procedure
-                begin
-                   Memo1.Lines.Add('cant enter kingdom coords ');
-                   chrmosr.Reload;
-                end);
-              exit;
-            end;
-
-            // --- Step 3: Act if found, or exit if timeout ---
-            if WindowFound then
-            begin
-
-              TThread.Synchronize(nil,
-                procedure
-                const
-                  posX=481;
-                  posY=416;
-                begin
-                  // // kindom 481,416
-                  MouseMove([], posX, posY);
-                  MouseDown(mbLeft, [], posX, posY);
-                  sleep(10);
-                  MouseUp(mbLeft, [], posX, posY);
-                end);
-
-              sleep(60);
-
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                  sendBackspaceKey(VK_BACK);
-                  sendBackspaceKey(VK_BACK);
-                  sendBackspaceKey(VK_BACK);
-                end);
-              //
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                  inputdata(kingdom);
-                  // sendBackspaceKey(ord('1'));
-                  // sendBackspaceKey(ord('0'));
-                  // sendBackspaceKey(ord('1'));
-                end);
-
-              sleep(60);
-
-              TThread.Synchronize(nil,
-                procedure
-                 const
-                  posX=583;
-                  posY=416;
-                begin
-                  // // x 512, 360
-                  MouseMove([], posX, posY);
-                  MouseDown(mbLeft, [], posX, posY);
-                  sleep(10);
-                  MouseUp(mbLeft, [], posX, posY);
-                end);
-
-              sleep(60);
-
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                  sendBackspaceKey(VK_BACK);
-                  sendBackspaceKey(VK_BACK);
-                  sendBackspaceKey(VK_BACK);
-                end);
-
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                    inputdata(sCoordX);
-//                    sendBackspaceKey(ord('2'));
-//                    sendBackspaceKey(ord('0'));
-//                    // sendBackspaceKey(ord('1'));
-                 end);
-
-              TThread.Synchronize(nil,
-                procedure
-                const
-                  posX=686;
-                  posY=416;
-                begin
-                  // y 615, 360
-                  MouseMove([], posX, posY);
-                  MouseDown(mbLeft, [], posX, posY);
-                  sleep(10);
-                  MouseUp(mbLeft, [], posX, posY);
-                end);
-
-              sleep(60);
-
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                  sendBackspaceKey(VK_BACK);
-                  sendBackspaceKey(VK_BACK);
-                  sendBackspaceKey(VK_BACK);
-                end);
-
-              TThread.Synchronize(nil,
-                procedure
-                begin
-                      inputdata(sCoordY);
-//                      sendBackspaceKey(ord('2'));
-//                      sendBackspaceKey(ord('0'));
-                      // sendBackspaceKey(ord('1'));
-
-                end);
-
-              sleep(60);
-
-              TThread.Synchronize(nil,
-                procedure
-                 const
-                  posX=583;
-                  posY=464;
-                begin
-                  // go button 509,402
-                  MouseMove([], posX, posY);
-                  MouseDown(mbLeft, [], posX, posY);
-                  sleep(10);
-                  MouseUp(mbLeft, [], posX, posY);
-                end);
 {$ENDREGION 'kingdom coordinates'}
-              sleep(1000); // wait for window load on new location
+            sleep(1300); // wait for window load on new location
 
-              try
-                /// ///////////////////
-                TThread.Synchronize(nil,
-                  procedure
-                  begin
-                    sleepDelay := seDelay.value;
-                  end);
-
-                // Initialize
-                currentXPosition := 0;
-                prevCoordX := 0;
-
-                goingRight := True;
-                verticalStepsTaken := 0;
-
-                TThread.Synchronize(nil,
-                  procedure
-                  begin
-                    // This nested procedure runs safely on the Main UI thread
-
-                    prevCoordX := currentXPosition; // save old position
-                    { coordXOK := } getXCoords(prevCoordX, currentXPosition);
-                  end);
-
-                // Main loop continues until 20 vertical steps have been taken
-                while verticalStepsTaken < TOTAL_VERTICAL_STEPS do
+            try
+              /// ///////////////////
+              TThread.Synchronize(nil,
+                procedure
                 begin
+                  sleepDelay := seDelay.value;
+                end);
 
-                  if (haveError) then
-                  begin
-                    Exit;
-                  end;
+              // Initialize
+              currentXPosition := 0;
+              prevCoordX := 0;
+              prevCoordY := 0;
 
-                  if FTask.Status = TTaskStatus.Canceled then
-                    Exit;
+              goingRight := True;
+              verticalStepsTaken := 0;
 
-                  var Yends := false;
-                  TThread.Synchronize(nil,
-                    procedure
-                    var posY:integer;
-                    begin
-                      if (trim(edit3.text)<>'') and (TryStrToInt(edit3.text,posY)) then
-                      begin
-                        if posY>950 then
-                          Yends:=true
-                      end;
-                    end);
-                  if Yends then break;
-                  
-
-                  FTask.CheckCanceled;
-
-                  TThread.Synchronize(nil,
-                    procedure
-                    begin
-                      sendBackspaceKey(VK_ESCAPE);
-                    end);
-
-                  searchMerc;
-
-                  // Continuous movement logic
-                  if goingRight then
-                  begin
-                    panRight();
-                  end
-                  else
-                  begin
-                    panLeft();
-                  end;
-
-                  TThread.Synchronize(nil,
-                    procedure
-                    begin
-                      // This nested procedure runs safely on the Main UI thread
-
-                      var
-                      coordXOK := getXCoords(prevCoordX, currentXPosition);
-
-                      if coordXOK then
-                      begin // ---->
-                        // if goingright currX should be higher than prevX
-                        if goingRight and (currentXPosition < prevCoordX) then
-                        begin
-//                           Memo1.Lines.Add('fixing right ' + inttostr(currentXPosition)+' prev: '+ inttostr(prevCoordX));
-                          currentXPosition := prevCoordX + 10;
-                          // fixing left 749 prev: 57
-                        end
-                        else if not goingRight and
-                          (currentXPosition > prevCoordX) then
-                        begin
-//                           Memo1.Lines.Add('fixing left ' + inttostr(currentXPosition)+' prev: '+ inttostr(prevCoordX));
-                          currentXPosition := prevCoordX - 10;
-                        end;
-
-                      end;
-
-                      // OCR failed, predict next x position
-                      if not coordXOK then
-                      begin // ---->
-                        if goingRight and (prevCoordX + 10 < MAX_BOUNDARY) then
-                        begin
-                          currentXPosition := prevCoordX + 10;
-                        end
-                        else if not goingRight and
-                          (prevCoordX - 10 > MIN_BOUNDARY) then
-                        begin
-                          currentXPosition := prevCoordX - 10;
-                        end;
-//                         Memo1.Lines.Add('failed ' + inttostr(currentXPosition));
-                      end;
-
-//                      Memo1.Lines.Add('pX ' + inttostr(prevCoordX)+' nX '+ inttostr(currentXPosition));
-
-                    end);
-
-
-
-                  // --- Check for overshoot and execute required actions ---
-
-                  // Check if it overshot the right boundary (>= 950)
-                  if goingRight and (currentXPosition >= MAX_BOUNDARY) then
-                  begin
-                    // Go down 1 step
-                    Inc(verticalStepsTaken);
-                    panDown();
-//
-                    TThread.Synchronize(nil,
-                     procedure
-                     begin
-                       chkToRight.Checked:=false;
-                     end);
-
-                    // Reverse direction
-                    goingRight := False;
-                  end
-                  // Check if it overshot the left boundary (<= 50)
-                  else if not goingRight and (currentXPosition <= MIN_BOUNDARY)
-                  then
-                  begin
-                    // Go down 1 step
-                    Inc(verticalStepsTaken);
-                    panDown();
-
-                     TThread.Synchronize(nil,
-                     procedure
-                     begin
-                       chkToRight.Checked:=true;
-                     end);
-
-                    // Reverse direction
-                    goingRight := True;
-                  end;
+              TThread.Synchronize(nil,
+                procedure
+                begin
+                  // This nested procedure runs safely on the Main UI thread
 
                   prevCoordX := currentXPosition; // save old position
-                  // Application.ProcessMessages; // Necessary for UI updates within a tight loop
-                  // Sleep(20); // Optional: Add a small pause for visual demonstration speed
-                end;
+                  { coordXOK := } getXCoords(prevCoordX, currentXPosition);
+                end);
 
-                /// ///////////////
-              except
-                on E: Exception do
+              // Main loop continues until 20 vertical steps have been taken
+              while verticalStepsTaken < TOTAL_VERTICAL_STEPS do
+              begin
+
+                if (Form1.haveGlobalError) then
+            begin
+              outputdebugstring('error 1');
+              Exit;
+            end;
+
+            err:=false;
+             TThread.Synchronize(nil,
+            procedure
+            begin
+              err := haveFormError;
+            end);
+            if err then exit;
+
+                FTask.CheckCanceled;
+                outputdebugstring('here 1');
+                var
+                Yends := False;
+                TThread.Synchronize(nil,
+                  procedure
+                  var
+                    posY: Integer;
+                  begin
+                    if (trim(Edit3.text) <> '') and (tryStrToInt(Edit3.text,
+                      posY)) then
+                    begin
+                      if posY > 950 then
+                        Yends := True
+                    end;
+                  end);
+                if Yends then
+                  Break;
+
+                TThread.Synchronize(nil,
+                  procedure
+                  begin
+                    sendBackspaceKey(VK_ESCAPE);
+                  end);
+
+                TThread.Synchronize(nil,
+                  procedure
+                  begin
+                    searchMerc;
+                  end);
+
+                // Continuous movement logic
+                if goingRight then
                 begin
-                  outputdebugstring(pchar('exception task ' + E.message));
+                  TThread.Synchronize(nil,
+                    procedure
+                    begin
+                      panRightt();
+                    end);
+                  outputdebugstring('here 2');
+
+                  Inc(sweepCount);
+                end
+                else
+                begin
+                  TThread.Synchronize(nil,
+                    procedure
+                    begin
+                      panLeftt();
+                    end);
+                  outputdebugstring('here3');
+
+                  Inc(sweepCount);
+                end;
+                outputdebugstring('here 4');
+                if goingRight then
+                begin
+                  if sweepCount > MAX_SWEEPS then
+                  begin
+                    // only check ocr if at the end-right of the map
+                    TThread.Synchronize(nil,
+                      procedure
+                      begin
+                        var
+                        coordXOK := getXCoords(prevCoordX, currentXPosition);
+
+                        if coordXOK then
+                        begin // ---->
+                          // if goingright currX should be higher than prevX
+                          if (currentXPosition < prevCoordX) then
+                          begin
+                            currentXPosition := prevCoordX + sweepDistance;
+                          end;
+
+                        end;
+
+                        // OCR failed, predict next x position
+                        if not coordXOK then
+                        begin // <----
+                          if (prevCoordX + sweepDistance < MAX_BOUNDARY) then
+                          begin
+                            currentXPosition := prevCoordX + sweepDistance;
+                          end;
+                        end;
+                      end);
+                  end
+                  else
+                  begin
+                    // calculate currentXPosition,prevCoordX
+                    TThread.Synchronize(nil,
+                      procedure
+                      begin
+                        currentXPosition := MIN_BOUNDARY +
+                          (sweepCount * sweepDistance);
+                        prevCoordX := currentXPosition - sweepDistance;
+                        Edit2.text := inttostr(currentXPosition);
+                      end);
+                  end;
                 end;
 
+                if not goingRight then
+                begin
+                  if sweepCount > MAX_SWEEPS then
+                  begin
+                    // only check ocr if at the start-left of the map
+                    TThread.Synchronize(nil,
+                      procedure
+                      begin
+                        var
+                        coordXOK := getXCoords(prevCoordX, currentXPosition);
+
+                        if coordXOK then
+                        begin // <----
+                          // if goingleft currX should be lower than prevX
+                          if (currentXPosition > prevCoordX) then
+                          begin
+                            currentXPosition := prevCoordX - sweepDistance;
+                          end;
+
+                        end;
+
+                        // OCR failed, predict next x position
+                        if not coordXOK then
+                        begin // <----
+                          if (prevCoordX - sweepDistance > MIN_BOUNDARY) then
+                          begin
+                            currentXPosition := prevCoordX - sweepDistance;
+                          end;
+                        end;
+                      end);
+                  end
+                  else
+                  begin
+                    // calculate currentXPosition,prevCoordX
+                    TThread.Synchronize(nil,
+                      procedure
+                      begin
+                        currentXPosition := MAX_BOUNDARY -
+                          (sweepCount * sweepDistance);
+                        prevCoordX := currentXPosition + sweepDistance;
+                        Edit2.text := inttostr(currentXPosition);
+                      end);
+                  end;
+                end;
+
+
+                // --- Check for overshoot and execute required actions ---
+
+                // Check if it overshot the right boundary (>= 950)
+                if goingRight and ((currentXPosition >= MAX_BOUNDARY) or
+                  (sweepCount > MAX_MAX_SWEEPS)) then
+                begin
+                  // Go down 1 step
+                  Inc(verticalStepsTaken);
+
+                  TThread.Synchronize(nil,
+                    procedure
+                    begin
+                      panDownn();
+                    end);
+
+                  var
+                  coordY := 0;
+                  if getYCoords(prevCoordY, coordY) then
+                  begin
+                    prevCoordY := currentXPosition;
+                  end;
+                  //
+                  TThread.Synchronize(nil,
+                    procedure
+                    begin
+                      chkToRight.Checked := False;
+                      Memo1.Lines.Add('pan right count ' + inttostr(sweepCount)
+                        + ' , x: ' + inttostr(currentXPosition));
+
+                    end);
+
+                  // Reverse direction
+                  goingRight := False;
+                  sweepCount := 0;
+                end
+                // Check if it overshot the left boundary (<= 50)
+                else if not goingRight and ((currentXPosition <= MIN_BOUNDARY)
+                  or (sweepCount > MAX_MAX_SWEEPS)) then
+                begin
+                  // Go down 1 step
+                  Inc(verticalStepsTaken);
+                  TThread.Synchronize(nil,
+                    procedure
+                    begin
+                      panDownn();
+                    end);
+
+                  var
+                  coordY := 0;
+                  if getYCoords(prevCoordY, coordY) then
+                  begin
+                    prevCoordY := currentXPosition;
+                  end;
+
+                  TThread.Synchronize(nil,
+                    procedure
+                    begin
+                      chkToRight.Checked := True;
+                      Memo1.Lines.Add('pan left count ' + inttostr(sweepCount) +
+                        ' , x: ' + inttostr(currentXPosition));
+
+                    end);
+
+                  // Reverse direction
+                  goingRight := True;
+                  sweepCount := 0;
+                end;
+
+                prevCoordX := currentXPosition; // save old position
+                // Application.ProcessMessages; // Necessary for UI updates within a tight loop
+                // Sleep(20); // Optional: Add a small pause for visual demonstration speed
               end;
-            end; // end if windowfound
+//
+//              /// ///////////////
+            except
+              on E: Exception do
+              begin
+                outputdebugstring(pchar('exception task ' + E.message));
+              end;
+
+            end;
 
           end; // end loop memo kingdom
 
@@ -2100,25 +2439,25 @@ begin
           on E: Exception do
           begin
             outputdebugstring(pchar('catched an error ' + E.message));
-            TThread.Synchronize(nil,
-              procedure
-              begin
-                outputdebugstring(pchar('An error occurred, reload the page: ' +
-                  E.message));
-              end);
+            // TThread.Synchronize(nil,
+            // procedure
+            // begin
+            outputdebugstring(pchar('An error occurred, reload the page: ' +
+              E.message));
+            // end);
 
           end;
         end;
       finally
-        TThread.Queue(nil,
-          procedure
-          begin
-            Button2.Enabled := True;
-            chkToRight.Enabled:=True;
-            chkBrowserLock.Checked := False;
-            panelOverlay.Visible := False;
-            timer2.Enabled:=false;
-          end);
+        // TThread.Queue(nil,
+        // procedure
+        // begin
+        Button2.Enabled := True;
+        chkToRight.Enabled := True;
+        chkBrowserLock.Checked := False;
+        panelOverlay.Visible := False;
+        Timer2.Enabled := False;
+        // end);
       end;
 
     end); // ttask.run ends
@@ -2127,37 +2466,46 @@ end;
 
 procedure TForm1.Button3Click(Sender: TObject);
 begin
-  FTask.Cancel;
+  if FTask <> nil then
+    FTask.Cancel;
 end;
 
 procedure TForm1.Button4Click(Sender: TObject);
 begin
 
- MemoKingdoms.Lines.BeginUpdate; // Prevents flicker
+  memoKingdoms.Lines.BeginUpdate; // Prevents flicker
   try
-    MemoKingdoms.Clear;
-    MemoKingdoms.Lines.Add('142');
-    MemoKingdoms.Lines.Add('147');
-    MemoKingdoms.Lines.Add('150');
-    MemoKingdoms.Lines.Add('143');
-    MemoKingdoms.Lines.Add('151');
-    MemoKingdoms.Lines.Add('138');
-    MemoKingdoms.Lines.Add('139');
-    MemoKingdoms.Lines.Add('148');
-    MemoKingdoms.Lines.Add('152');
-    MemoKingdoms.Lines.Add('154');
-    MemoKingdoms.Lines.Add('155');
-    MemoKingdoms.Lines.Add('144');
-    MemoKingdoms.Lines.Add('148');
-    MemoKingdoms.Lines.Add('156');
-    MemoKingdoms.Lines.Add('141');
-    MemoKingdoms.Lines.Add('145');
-    MemoKingdoms.Lines.Add('149');
-    MemoKingdoms.Lines.Add('153');
-    MemoKingdoms.Lines.Add('157');
+    memoKingdoms.Clear;
+    memoKingdoms.Lines.Add('142');
+    memoKingdoms.Lines.Add('147');
+    memoKingdoms.Lines.Add('150');
+    memoKingdoms.Lines.Add('143');
+    memoKingdoms.Lines.Add('151');
+    memoKingdoms.Lines.Add('138');
+    memoKingdoms.Lines.Add('139');
+    memoKingdoms.Lines.Add('148');
+    memoKingdoms.Lines.Add('152');
+    memoKingdoms.Lines.Add('154');
+    memoKingdoms.Lines.Add('155');
+    memoKingdoms.Lines.Add('144');
+    memoKingdoms.Lines.Add('148');
+    memoKingdoms.Lines.Add('156');
+    memoKingdoms.Lines.Add('141');
+    memoKingdoms.Lines.Add('145');
+    memoKingdoms.Lines.Add('149');
+    memoKingdoms.Lines.Add('153');
+    memoKingdoms.Lines.Add('157');
   finally
-    MemoKingdoms.Lines.EndUpdate;
+    memoKingdoms.Lines.EndUpdate;
   end;
+end;
+
+procedure TForm1.Button5Click(Sender: TObject);
+var
+  c: Integer;
+begin
+  // getXCoords(10, c);
+  panLeftt;
 end;
 
 procedure TForm1.FormAfterMonitorDpiChanged(Sender: TObject;
@@ -2180,7 +2528,7 @@ end;
 
 procedure TForm1.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
 begin
-  if (FTask <> nil) and (FTask.Status = TTaskStatus.Running) then
+  if (FTask <> nil) and (FTask.status = TTaskStatus.Running) then
   begin
     FTask.Cancel;
     FTask.Wait;
@@ -2195,6 +2543,17 @@ begin
     chrmosr.CloseBrowser(True);
   end;
 
+end;
+
+constructor TForm1.Create(AOwner: TComponent; const id: cardinal;
+cacheNameSufix: string; templateGoToLocation, TemplateImg: pCvMat_t);
+begin
+  inherited Create(AOwner);
+
+  self.Fid := id;
+  self.cacheNameSufix := cacheNameSufix;
+  self.templateGoToLocation := templateGoToLocation;
+  self.TemplateImg := TemplateImg;
 end;
 
 procedure TForm1.FormCreate(Sender: TObject);
@@ -2220,6 +2579,13 @@ begin
   FResizeCS := TCriticalSection.Create;
   FIMECS := TCriticalSection.Create;
   FBrowserInfoCS := TCriticalSection.Create;
+  FJSDialogInfoCS := TCriticalSection.Create;
+  FOriginUrl := '';
+  FMessageText := '';
+  FDefaultPromptText := '';
+  FPendingDlg := False;
+  FDialogType := JSDIALOGTYPE_ALERT;
+  FCallback := nil;
 
   Panel1.Transparent := TRANSPARENT_BROWSER;
 
@@ -2232,9 +2598,8 @@ begin
 
   InitializeLastClick;
 
-  prevYCoords:=0;
-
-  chrmosr.DefaultURL := trim(AddressCb.text);
+  chrmosr.RuntimeStyle := CEF_RUNTIME_STYLE_ALLOY;
+  chrmosr.DefaultUrl := trim(AddressCb.text);
 
   tesseract := TTesseractOCR5.Create(ExtractFilePath(application.ExeName)
     + 'DLL\');
@@ -2264,6 +2629,9 @@ begin
     FreeAndNil(FIMECS);
   if (FBrowserInfoCS <> nil) then
     FreeAndNil(FBrowserInfoCS);
+
+  FreeAndNil(FJSDialogInfoCS);
+  FCallback := nil;
 
   FreeAndNil(tesseract);
 
@@ -2323,10 +2691,12 @@ begin
       RegisterTouchWindow(Panel1.Handle, 0);
 {$ENDIF}
     try
-      TempCache := GlobalCEFApp.RootCache + '\cache' +
+      TempCache := GlobalCEFApp.RootCache + '\cache' + cacheNameSufix +
         inttostr(MainForm.BrowserCount);
       TempContext := TCefRequestContextRef.New(TempCache, '', '', False, False,
         chrmosr.ReqContextHandler);
+
+      Caption := TempCache;
 
       if chrmosr.CreateBrowser(nil, '', TempContext) then
         chrmosr.InitializeDragAndDrop(Panel1)
@@ -2443,6 +2813,16 @@ var
   TempEvent: TCefMouseEvent;
   TempTime: Integer;
 begin
+  if not Initialized then
+    Exit;
+
+  if (haveGlobalError) then
+    Exit;
+
+  if (haveFormError) then
+    Exit;
+
+
 {$IFDEF DELPHI14_UP}
   if (ssTouch in Shift) then
     Exit;
@@ -2470,8 +2850,7 @@ begin
     FLastClickCount);
 
 
-// outputdebugstring(pchar('mouse down ' + inttostr(X) + ',' + inttostr(Y)));
-
+  // outputdebugstring(pchar('mouse down ' + inttostr(X) + ',' + inttostr(Y)));
 
 end;
 
@@ -2510,6 +2889,16 @@ var
   TempEvent: TCefMouseEvent;
   TempTime: Integer;
 begin
+  if not Initialized then
+    Exit;
+
+  if (haveGlobalError) then
+    Exit;
+
+  if (haveFormError) then
+    Exit;
+
+
 {$IFDEF DELPHI14_UP}
   if (ssTouch in Shift) then
     Exit;
@@ -2538,6 +2927,16 @@ X, Y: Integer);
 var
   TempEvent: TCefMouseEvent;
 begin
+  if not Initialized then
+    Exit;
+
+  if (haveGlobalError) then
+    Exit;
+
+  if (haveFormError) then
+    Exit;
+
+
 {$IFDEF DELPHI14_UP}
   if (ssTouch in Shift) then
     Exit;
@@ -2549,7 +2948,7 @@ begin
   chrmosr.SendMouseClickEvent(@TempEvent, GetButton(Button), True,
     FLastClickCount);
 
-//    outputdebugstring(pchar('mouse up ' + inttostr(X) + ',' + inttostr(Y)));
+  // outputdebugstring(pchar('mouse up ' + inttostr(X) + ',' + inttostr(Y)));
 end;
 
 procedure TForm1.Panel1MouseUp(Sender: TObject; Button: TMouseButton;
@@ -2924,10 +3323,11 @@ var
 begin
   Timer1.Enabled := False;
   try
-    TempCache := GlobalCEFApp.RootCache + '\cache' +
+    TempCache := GlobalCEFApp.RootCache + '\cache' + cacheNameSufix +
       inttostr(MainForm.BrowserCount);
     TempContext := TCefRequestContextRef.New(TempCache, '', '', False, False,
       chrmosr.ReqContextHandler);
+
     if chrmosr.CreateBrowser(nil, '', TempContext) then
       chrmosr.InitializeDragAndDrop(Panel1)
     else if not(chrmosr.Initialized) then
@@ -2941,12 +3341,26 @@ end;
 
 procedure TForm1.Timer2Timer(Sender: TObject);
 var
-   coordY:integer;
+  coordX, coordY: Integer;
+  prevXCoords: Integer;
+  prevYCoords: Integer;
 begin
-if getYCoords(prevYCoords, coordY) then
-begin
-   //
-end;
+  prevXCoords := 0;
+  if trim(Edit2.text) <> '' then
+    tryStrToInt(trim(Edit2.text), prevXCoords);
+
+  prevYCoords := 0;
+  if trim(Edit3.text) <> '' then
+    tryStrToInt(trim(Edit3.text), prevYCoords);
+
+  if getYCoords(prevYCoords, coordY) then
+  begin
+    //
+  end;
+  // if getXCoords(prevXCoords, coordX) then
+  // begin
+  // //
+  // end;
 end;
 
 procedure TForm1.captureScreenshot;
@@ -3083,7 +3497,7 @@ begin
   for i := 0 to application.MainForm.MDIChildCount - 1 do
   begin
     Child := TForm1(application.MainForm.MDIChildren[i]);
-    if Child <> Self then
+    if Child <> self then
     begin
       // Perform the action on each sibling (customize as needed)
       if EventType = 'MouseDown' then

@@ -10,6 +10,10 @@ uses Vcl.Imaging.jpeg, Vcl.Controls, Vcl.ExtCtrls,
 function PerformTemplateMatching(screenshot:TBitmap;TemplateImg: pCvMat_t; threshold: single): double;
  function IsScrollLockOn: Boolean;
  procedure playBeep();
+  procedure WhitenLightGrayShades(Bitmap: TBitmap; const LightGrayCutoff: Byte = 180);
+  procedure ConvertTBitmapGrayToBlackAndWhite(Bitmap: TBitmap; const Threshold: Byte = 128);
+
+
 
 implementation
 
@@ -162,5 +166,81 @@ begin
       tmp.Free;
   end;
 end;
+
+
+procedure ConvertTBitmapGrayToBlackAndWhite(Bitmap: TBitmap; const Threshold: Byte = 128);
+var
+  X, Y: Integer;
+  PixelColor: TColor;
+  Luminance: Byte;
+  ScanLine: PRGBTriple;
+begin
+  if not Assigned(Bitmap) then Exit;
+
+  // Ensure it's 24-bit format for easy Scanline access to RGB values
+  Bitmap.PixelFormat := pf24bit;
+
+  for Y := 0 to Bitmap.Height - 1 do
+  begin
+    ScanLine := Bitmap.ScanLine[Y];
+    for X := 0 to Bitmap.Width - 1 do
+    begin
+      // Since it's grayscale, R=G=B. We just use the Red component for Luminance.
+      Luminance := ScanLine.rgbtRed;
+
+      if Luminance >= Threshold then
+      begin
+        // If bright enough, make it pure white
+        ScanLine.rgbtRed := 255;
+        ScanLine.rgbtGreen := 255;
+        ScanLine.rgbtBlue := 255;
+      end
+      else
+      begin
+        // Otherwise, make it pure black
+        ScanLine.rgbtRed := 0;
+        ScanLine.rgbtGreen := 0;
+        ScanLine.rgbtBlue := 0;
+      end;
+      Inc(ScanLine);
+    end;
+  end;
+end;
+
+
+procedure WhitenLightGrayShades(Bitmap: TBitmap; const LightGrayCutoff: Byte = 180);
+var
+  X, Y: Integer;
+  ScanLine: PRGBTriple;
+  Luminance: Byte;
+begin
+  if not Assigned(Bitmap) then Exit;
+
+  // Set pixel format for direct access
+  Bitmap.PixelFormat := pf24bit;
+
+  for Y := 0 to Bitmap.Height - 1 do
+  begin
+    ScanLine := Bitmap.ScanLine[Y];
+    for X := 0 to Bitmap.Width - 1 do
+    begin
+      // Assuming the image is grayscale, R=G=B. Use Red component.
+      Luminance := ScanLine.rgbtRed;
+
+      // Check if the shade is "light enough"
+      if Luminance >= LightGrayCutoff then
+      begin
+        // Force all channels to maximum white
+        ScanLine.rgbtRed := 255;
+        ScanLine.rgbtGreen := 255;
+        ScanLine.rgbtBlue := 255;
+      end;
+      // If it's darker than LightGrayCutoff, we leave it alone.
+
+      Inc(ScanLine);
+    end;
+  end;
+end;
+
 
 end.

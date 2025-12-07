@@ -104,6 +104,29 @@ object MainForm: TMainForm
       NumGlyphs = 2
       OnClick = ExitBtnClick
     end
+    object Panel3: TPanel
+      Left = 80
+      Top = 0
+      Width = 241
+      Height = 30
+      TabOrder = 0
+      object Label2: TLabel
+        Left = 5
+        Top = 6
+        Width = 62
+        Height = 13
+        Caption = 'Cache name'
+      end
+      object edtCacheNameSufix: TEdit
+        Left = 73
+        Top = 3
+        Width = 152
+        Height = 21
+        TabOrder = 0
+        Text = 'asdf'
+        TextHint = 'no spaces or special characters'
+      end
+    end
   end
   object Memo1: TMemo
     Left = 208

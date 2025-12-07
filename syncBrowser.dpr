@@ -12,7 +12,8 @@ uses
   uMainForm in 'uMainForm.pas' {MainForm},
   uChildForm in 'uChildForm.pas' {ChildForm},
   Unit3 in 'Unit3.pas',
-  uSimpleOSRBrowser in 'uSimpleOSRBrowser.pas' {Form1};
+  uSimpleOSRBrowser in 'uSimpleOSRBrowser.pas' {Form1},
+  uWSHandler in 'uWSHandler.pas';
 
 {$R *.RES}
 

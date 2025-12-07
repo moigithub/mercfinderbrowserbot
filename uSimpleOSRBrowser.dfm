@@ -1,7 +1,7 @@
 object Form1: TForm1
   Left = 0
   Top = 0
-  Width = 1501
+  Width = 1579
   Height = 957
   AutoScroll = True
   Caption = 'Simple OSR Browser - Initializing browser. Please wait...'
@@ -90,9 +90,8 @@ object Form1: TForm1
   object NavControlPnl: TPanel
     Left = 0
     Top = 0
-    Width = 1485
+    Width = 1385
     Height = 30
-    Align = alTop
     BevelOuter = bvNone
     Padding.Left = 5
     Padding.Top = 5
@@ -110,23 +109,22 @@ object Form1: TForm1
       OnEnter = AddressCbEnter
     end
     object Panel2: TPanel
-      Left = 1355
+      Left = 1255
       Top = 5
       Width = 125
       Height = 20
       Margins.Left = 2
-      Margins.Top = 2
+      Margins.Top = 0
       Margins.Right = 2
-      Margins.Bottom = 2
+      Margins.Bottom = 0
       Align = alRight
-      BevelOuter = bvNone
       Padding.Left = 4
       TabOrder = 1
       object GoBtn: TButton
-        Left = 4
-        Top = 0
+        Left = 5
+        Top = 1
         Width = 40
-        Height = 20
+        Height = 18
         Align = alLeft
         Caption = 'Go'
         TabOrder = 0
@@ -134,10 +132,10 @@ object Form1: TForm1
         OnEnter = GoBtnEnter
       end
       object SnapshotBtn: TButton
-        Left = 94
-        Top = 0
+        Left = 93
+        Top = 1
         Width = 31
-        Height = 20
+        Height = 18
         Hint = 'Take snapshot'
         Margins.Left = 5
         Align = alRight
@@ -155,10 +153,10 @@ object Form1: TForm1
         OnEnter = SnapshotBtnEnter
       end
       object Button1: TButton
-        Left = 64
-        Top = 0
+        Left = 63
+        Top = 1
         Width = 30
-        Height = 20
+        Height = 18
         Align = alRight
         Caption = 'R'
         TabOrder = 2
@@ -170,7 +168,7 @@ object Form1: TForm1
     Left = 1169
     Top = 36
     Width = 96
-    Height = 49
+    Height = 29
     Caption = 'Start'
     TabOrder = 1
     OnClick = Button2Click
@@ -212,9 +210,9 @@ object Form1: TForm1
   end
   object Button3: TButton
     Left = 1271
-    Top = 38
+    Top = 36
     Width = 89
-    Height = 45
+    Height = 70
     Caption = 'Stop'
     TabOrder = 5
     OnClick = Button3Click
@@ -299,14 +297,64 @@ object Form1: TForm1
     TabOrder = 14
     OnClick = btnRotateClick
   end
+  object Button5: TButton
+    Left = 1408
+    Top = 96
+    Width = 75
+    Height = 25
+    Caption = 'Button5'
+    TabOrder = 15
+    OnClick = Button5Click
+  end
+  object seConst: TSpinEdit
+    Left = 1313
+    Top = 228
+    Width = 72
+    Height = 22
+    MaxValue = 100
+    MinValue = 1
+    TabOrder = 16
+    Value = 2
+  end
+  object seBlocksize: TSpinEdit
+    Left = 1312
+    Top = 200
+    Width = 73
+    Height = 22
+    Increment = 2
+    MaxValue = 61
+    MinValue = 1
+    TabOrder = 17
+    Value = 11
+  end
+  object btnCrash: TButton
+    Left = 1402
+    Top = 48
+    Width = 75
+    Height = 25
+    Caption = 'btnCrash'
+    TabOrder = 18
+    OnClick = btnCrashClick
+  end
+  object Button6: TButton
+    Left = 1169
+    Top = 71
+    Width = 96
+    Height = 25
+    Caption = 'Start 2'
+    TabOrder = 19
+  end
   object chrmosr: TChromium
     OnCanFocus = chrmosrCanFocus
+    OnProcessMessageReceived = chrmosrProcessMessageReceived
     OnTooltip = chrmosrTooltip
     OnConsoleMessage = chrmosrConsoleMessage
     OnCursorChange = chrmosrCursorChange
+    OnJsdialog = chrmosrJsdialog
     OnBeforePopup = chrmosrBeforePopup
     OnAfterCreated = chrmosrAfterCreated
     OnBeforeClose = chrmosrBeforeClose
+    OnClose = chrmosrClose
     OnRenderProcessUnresponsive = chrmosrRenderProcessUnresponsive
     OnRenderProcessTerminated = chrmosrRenderProcessTerminated
     OnGetViewRect = chrmosrGetViewRect
